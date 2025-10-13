@@ -82,15 +82,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy deploy files to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "deploy/*"
-          target: "~/bangla-deploy"
-
       - name: Deploy on VPS via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -99,12 +90,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -e
-            cd ~/bangla-deploy
-            echo "REGISTRY=${{ env.REGISTRY }}" > .env.deploy
-            echo "OWNER=${{ github.repository_owner }}" >> .env.deploy
-            export REGISTRY=${{ env.REGISTRY }}
-            export OWNER=${{ github.repository_owner }}
-            chmod +x ./deploy.sh
-            ./deploy.sh
-
-
+            cd ${{ secrets.VPS_PATH }}
+            git pull origin main
+            docker compose down || true
+            docker compose up -d --build || true

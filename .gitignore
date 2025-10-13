@@ -4,8 +4,34 @@ dist/
 
 # Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
 # OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# Build artifacts
+build/
+.next/
