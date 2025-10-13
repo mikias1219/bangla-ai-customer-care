@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bangla
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: bangla_ai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  backend:
+    image: ${REGISTRY}/${OWNER}/bangla-backend:latest
+    restart: unless-stopped
+    environment:
+      BANG_DATABASE_URL: postgresql://bangla:${POSTGRES_PASSWORD}@postgres:5432/bangla_ai
+      BANG_REDIS_URL: redis://redis:6379/0
+      BANG_SECRET_KEY: ${BANG_SECRET_KEY}
+      BANG_CORS_ORIGINS: ${BANG_CORS_ORIGINS:-["https://your-domain","http://localhost:5173"]}
+      BANG_NLU_MODEL_NAME: ${BANG_NLU_MODEL_NAME:-sagorsarker/bangla-bert-base}
+      BANG_WHISPER_MODEL_SIZE: ${BANG_WHISPER_MODEL_SIZE:-base}
+      BANG_TTS_PROVIDER: ${BANG_TTS_PROVIDER:-google}
+      # Meta / WhatsApp / Twilio credentials if used
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      MESSENGER_PAGE_ID: ${MESSENGER_PAGE_ID:-}
+      MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:-}
+      INSTAGRAM_BUSINESS_ID: ${INSTAGRAM_BUSINESS_ID:-}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN:-}
+    ports:
+      - "8000:8000"
+
+  dashboard:
+    image: ${REGISTRY}/${OWNER}/bangla-dashboard:latest
+    restart: unless-stopped
+    environment:
+      # If you need to proxy API in nginx you can set here; static hosting by default
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+
