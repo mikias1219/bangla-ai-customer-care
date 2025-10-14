@@ -39,14 +39,18 @@ class OpenAIService:
             }
 
             if functions:
-                params["functions"] = functions
-                params["function_call"] = "auto"
+                params["tools"] = [{"type": "function", "function": func} for func in functions]
+                params["tool_choice"] = "auto"
 
-            response = await openai.ChatCompletion.acreate(**params)
+            response = openai.chat.completions.create(**params)
 
-            if functions and response.choices[0].message.get("function_call"):
+            if functions and response.choices[0].message.tool_calls:
+                tool_call = response.choices[0].message.tool_calls[0]
                 return json.dumps({
-                    "function_call": response.choices[0].message.function_call,
+                    "function_call": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    },
                     "content": response.choices[0].message.content
                 })
 

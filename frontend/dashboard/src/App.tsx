@@ -13,24 +13,35 @@ import { Customers } from './pages/Customers'
 
 export type Page = 'overview' | 'test' | 'intents' | 'entities' | 'conversations' | 'templates' | 'inbox' | 'products' | 'orders' | 'customers'
 
+import { Box, Container } from '@mui/material'
+
 export default function App() {
-  const [page, setPage] = useState<Page>('overview')
+  const [page, setPage] = useState<Page>('inbox') // Start with inbox as it's the main messaging interface
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', background: '#f9fafb' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <Nav current={page} onNavigate={setPage} />
-      <main style={{ flex: 1, padding: '24px', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-        {page === 'overview' && <Overview />}
-        {page === 'test' && <TestConsole />}
-        {page === 'intents' && <Intents />}
-        {page === 'entities' && <Entities />}
-        {page === 'conversations' && <Conversations />}
-        {page === 'templates' && <Templates />}
-        {page === 'inbox' && <Inbox />}
-        {page === 'products' && <Products />}
-        {page === 'orders' && <Orders />}
-        {page === 'customers' && <Customers />}
-      </main>
-    </div>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          overflow: 'auto',
+          ml: '280px', // Account for drawer width
+        }}
+      >
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+          {page === 'overview' && <Overview />}
+          {page === 'test' && <TestConsole />}
+          {page === 'intents' && <Intents />}
+          {page === 'entities' && <Entities />}
+          {page === 'conversations' && <Conversations />}
+          {page === 'templates' && <Templates />}
+          {page === 'inbox' && <Inbox />}
+          {page === 'products' && <Products />}
+          {page === 'orders' && <Orders />}
+          {page === 'customers' && <Customers />}
+        </Container>
+      </Box>
+    </Box>
   )
 }
