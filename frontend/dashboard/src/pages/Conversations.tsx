@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { apiBase } from '../lib/api'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import {
   ChatBubbleLeftRightIcon,
   ClockIcon,
-  UserIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   ClockIcon as ClockOutlineIcon

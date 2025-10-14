@@ -10,7 +10,6 @@ import {
   Box,
   Typography,
   Avatar,
-  Chip,
   useTheme
 } from '@mui/material'
 import {

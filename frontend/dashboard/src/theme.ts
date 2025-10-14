@@ -1,4 +1,17 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, PaletteColor } from '@mui/material/styles';
+
+declare module '@mui/material/styles' {
+  interface Palette {
+    whatsapp: PaletteColor;
+    facebook: PaletteColor;
+    instagram: PaletteColor;
+  }
+  interface PaletteOptions {
+    whatsapp?: PaletteColor;
+    facebook?: PaletteColor;
+    instagram?: PaletteColor;
+  }
+}
 
 export const theme = createTheme({
   palette: {
@@ -16,12 +29,21 @@ export const theme = createTheme({
     },
     whatsapp: {
       main: '#25d366',
+      light: '#4ade80',
+      dark: '#16a34a',
+      contrastText: '#ffffff',
     },
     facebook: {
       main: '#1877f2',
+      light: '#3b82f6',
+      dark: '#1d4ed8',
+      contrastText: '#ffffff',
     },
     instagram: {
       main: '#e4405f',
+      light: '#f472b6',
+      dark: '#be185d',
+      contrastText: '#ffffff',
     },
   },
   typography: {

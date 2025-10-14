@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.routers import health, nlu, dm, resolver, admin, intents, entities, conversations, templates, auth, products, orders, customers
 from app.channels import whatsapp, webchat
 from app.channels import meta as meta_channel
-from app.channels import voice_twilio
+from app.channels import voice_twilio, voice_voip
 from app.routers import metrics as metrics_router
 
 
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(webchat.router, prefix="/channels/webchat", tags=["channels"])
     app.include_router(meta_channel.router, prefix="/channels/meta", tags=["channels"])  # Messenger & Instagram
     app.include_router(voice_twilio.router, prefix="/channels/voice/twilio", tags=["channels"])  # Twilio voice
+    app.include_router(voice_voip.router, prefix="/channels/voice/voip", tags=["channels"])  # Asterisk/FreeSWITCH
 
     return app
 

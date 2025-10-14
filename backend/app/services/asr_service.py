@@ -1,6 +1,6 @@
 """
-ASR Service for Bangla speech recognition
-Uses OpenAI Whisper optimized for Bangla
+ASR Service for multilingual speech recognition
+Uses OpenAI Whisper for all languages with auto-detection
 """
 import whisper
 import numpy as np
@@ -23,37 +23,43 @@ class ASRService:
     def transcribe(
         self,
         audio_data: np.ndarray,
-        language: str = "bn",
+        language: Optional[str] = None,
         sample_rate: int = 16000
     ) -> Dict[str, Any]:
         """
-        Transcribe audio to Bangla text
-        
+        Transcribe audio to text in any language
+
         Args:
             audio_data: Audio as numpy array
-            language: Language code (default: bn for Bangla)
+            language: Language code (ISO 639-1), None for auto-detection
             sample_rate: Audio sample rate
-            
+
         Returns:
             Dict with text, confidence, and metadata
         """
         self.load_model()
-        
+
         # Resample if needed (Whisper expects 16kHz)
         if sample_rate != 16000:
             # In production, use librosa or scipy for resampling
             pass
-        
+
+        # Use None for auto-detection, or specific language code
+        whisper_language = None if language is None else language
+
         result = self.model.transcribe(
             audio_data,
-            language=language,
+            language=whisper_language,
             task="transcribe",
             fp16=False  # Set to True if using GPU
         )
-        
+
+        detected_language = result.get("language", language or "unknown")
+
         return {
             "text": result["text"],
-            "language": result.get("language", language),
+            "language": detected_language,
+            "language_confidence": result.get("language_probability", 0.0),
             "segments": result.get("segments", []),
             "confidence": self._calculate_confidence(result)
         }
@@ -67,19 +73,24 @@ class ASRService:
         confidences = [seg.get("no_speech_prob", 0.5) for seg in segments]
         return 1.0 - (sum(confidences) / len(confidences))
     
-    def transcribe_file(self, audio_path: str, language: str = "bn") -> Dict[str, Any]:
+    def transcribe_file(self, audio_path: str, language: Optional[str] = None) -> Dict[str, Any]:
         """Transcribe audio from file path"""
         self.load_model()
-        
+
+        whisper_language = None if language is None else language
+
         result = self.model.transcribe(
             audio_path,
-            language=language,
+            language=whisper_language,
             task="transcribe"
         )
-        
+
+        detected_language = result.get("language", language or "unknown")
+
         return {
             "text": result["text"],
-            "language": result.get("language", language),
+            "language": detected_language,
+            "language_confidence": result.get("language_probability", 0.0),
             "confidence": self._calculate_confidence(result)
         }
 

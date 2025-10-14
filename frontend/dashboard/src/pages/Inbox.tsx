@@ -1,9 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { apiBase } from '../lib/api'
 import { format } from 'date-fns'
+import type { ChangeEvent, KeyboardEvent } from 'react'
 import {
   Box,
-  Container,
   Paper,
   Typography,
   TextField,
@@ -16,7 +15,6 @@ import {
   ListItemAvatar,
   ListItemText,
   ListItemButton,
-  Divider,
   InputAdornment,
   Badge,
   Card,
@@ -30,7 +28,6 @@ import {
   Videocam as VideocamIcon,
   Info as InfoIcon,
   Search as SearchIcon,
-  MoreVert as MoreVertIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   AccessTime as AccessTimeIcon,
@@ -52,7 +49,7 @@ interface Conversation {
   timestamp: Date
   unreadCount: number
   channel: 'messenger' | 'whatsapp' | 'instagram'
-  status: 'active' | 'waiting' | 'resolved'
+  status: 'active' | 'waiting' | 'resolved' | 'completed' | 'escalated'
 }
 
 export function Inbox() {
@@ -193,18 +190,6 @@ export function Inbox() {
     return 'আপনার প্রশ্নটি ভালো করে বুঝতে পারলাম না। অনুগ্রহ করে আরেকটু বিস্তারিত করে বলুন, যেমন: "অর্ডার স্ট্যাটাস", "প্রোডাক্ট দাম", বা "ডেলিভারি ইনফো"।'
   }
 
-  const getChannelIcon = (channel: string) => {
-    switch (channel) {
-      case 'whatsapp':
-        return '💚'
-      case 'messenger':
-        return '💙'
-      case 'instagram':
-        return '💜'
-      default:
-        return '💬'
-    }
-  }
 
   const getChannelColor = (channel: string) => {
     switch (channel) {
@@ -543,8 +528,8 @@ export function Inbox() {
                 <TextField
                   fullWidth
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                  onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                   placeholder="Type a message..."
                   variant="outlined"
                   size="small"

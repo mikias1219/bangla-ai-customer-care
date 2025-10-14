@@ -25,10 +25,12 @@ class Settings(BaseSettings):
     # AI Services
     nlu_model_name: str = Field(default="sagorsarker/bangla-bert-base")
     whisper_model_size: str = Field(default="base")
-    tts_provider: str = Field(default="google")  # google, azure, coqui
-    
+    tts_provider: str = Field(default="openai")  # openai, google, azure, coqui
+    openai_tts_voice: str = Field(default="alloy", description="OpenAI TTS voice")
+    openai_tts_model: str = Field(default="tts-1", description="OpenAI TTS model")
+
     # External API keys
-    openai_api_key: str = Field(default="", description="OpenAI API key for GPT models")
+    openai_api_key: str = Field(default="", description="OpenAI API key for GPT models and TTS")
     openai_model: str = Field(default="gpt-4", description="OpenAI model to use")
     openai_max_tokens: int = Field(default=1000, description="Max tokens for OpenAI responses")
 

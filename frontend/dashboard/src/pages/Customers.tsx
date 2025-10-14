@@ -51,17 +51,6 @@ export function Customers() {
     }
   }
 
-  const loadCustomerOrders = async (customerId: number) => {
-    try {
-      const response = await fetch(`/api/customers/${customerId}/orders/`)
-      if (response.ok) {
-        return await response.json()
-      }
-    } catch (error) {
-      console.error('Failed to load customer orders:', error)
-    }
-    return []
-  }
 
   const getChannelIcon = (channel: string) => {
     const icons: Record<string, string> = {
