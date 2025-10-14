@@ -27,8 +27,26 @@ class Settings(BaseSettings):
     whisper_model_size: str = Field(default="base")
     tts_provider: str = Field(default="google")  # google, azure, coqui
     
-    # External API keys (optional)
-    openai_api_key: str = Field(default="")
+    # External API keys
+    openai_api_key: str = Field(default="", description="OpenAI API key for GPT models")
+    openai_model: str = Field(default="gpt-4", description="OpenAI model to use")
+    openai_max_tokens: int = Field(default=1000, description="Max tokens for OpenAI responses")
+
+    # Social Media API Keys
+    facebook_app_id: str = Field(default="", description="Facebook App ID")
+    facebook_app_secret: str = Field(default="", description="Facebook App Secret")
+    facebook_page_access_token: str = Field(default="", description="Facebook Page Access Token")
+    facebook_verify_token: str = Field(default="", description="Facebook Webhook Verify Token")
+
+    instagram_business_id: str = Field(default="", description="Instagram Business Account ID")
+    instagram_access_token: str = Field(default="", description="Instagram Access Token")
+
+    whatsapp_business_id: str = Field(default="", description="WhatsApp Business Account ID")
+    whatsapp_access_token: str = Field(default="", description="WhatsApp Access Token")
+    whatsapp_verify_token: str = Field(default="", description="WhatsApp Webhook Verify Token")
+    whatsapp_phone_number_id: str = Field(default="", description="WhatsApp Phone Number ID")
+
+    # Other API keys
     google_cloud_api_key: str = Field(default="")
     azure_speech_key: str = Field(default="")
     

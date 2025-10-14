@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.routers import health, nlu, dm, resolver, admin, intents, entities, conversations, templates, auth
+from app.routers import health, nlu, dm, resolver, admin, intents, entities, conversations, templates, auth, products, orders, customers
 from app.channels import whatsapp, webchat
 from app.channels import meta as meta_channel
 from app.channels import voice_twilio
@@ -53,6 +53,11 @@ def create_app() -> FastAPI:
     app.include_router(entities.router, prefix="/admin/entities", tags=["entities"])
     app.include_router(conversations.router, prefix="/admin/conversations", tags=["conversations"])
     app.include_router(templates.router, prefix="/admin/templates", tags=["templates"])
+
+    # E-commerce routers
+    app.include_router(products.router, prefix="/api", tags=["products"])
+    app.include_router(orders.router, prefix="/api", tags=["orders"])
+    app.include_router(customers.router, prefix="/api", tags=["customers"])
     
     # Channel adapters
     app.include_router(whatsapp.router, prefix="/channels/whatsapp", tags=["channels"])

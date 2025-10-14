@@ -5,6 +5,8 @@ Handles state tracking, slot filling, and action decisions
 from typing import Dict, Any, Optional, List
 from enum import Enum
 
+from app.services.product_inquiry_service import product_inquiry_service
+
 
 class ActionType(str, Enum):
     FETCH = "fetch"
@@ -36,6 +38,12 @@ class DialogueManager:
             "order_status": self._handle_order_status,
             "return_request": self._handle_return_request,
             "product_inquiry": self._handle_product_inquiry,
+            "price_inquiry": self._handle_price_inquiry,
+            "availability_inquiry": self._handle_availability_inquiry,
+            "product_info": self._handle_product_info,
+            "recommendation": self._handle_recommendation,
+            "purchase_intent": self._handle_purchase_intent,
+            "category_browse": self._handle_category_browse,
             "payment_issue": self._handle_payment_issue,
             "delivery_tracking": self._handle_delivery_tracking,
             "complaint": self._handle_complaint,
@@ -125,13 +133,167 @@ class DialogueManager:
         context: Dict[str, Any],
         state: DialogueState
     ) -> Dict[str, Any]:
-        """Handle product availability inquiry"""
+        """Handle product-related queries with instant database responses"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        # Use the product inquiry service for instant responses
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
         return {
-            "action": ActionType.FETCH,
-            "response_text_bn": "Product er availability check korchi...",
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
             "metadata": {
-                "resolver": "product_inquiry",
-                "entities": entities
+                "auto_responded": True,
+                "query_type": "product_inquiry",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_price_inquiry(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle price-specific inquiries"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "price_inquiry",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_availability_inquiry(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle availability/stock inquiries"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "availability_inquiry",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_product_info(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle product information requests"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "product_info",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_recommendation(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle product recommendation requests"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "recommendation",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_purchase_intent(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle purchase/order intentions"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "purchase_intent",
+                "intent": "purchase",
+                **result.get("metadata", {})
+            }
+        }
+
+    def _handle_category_browse(
+        self,
+        entities: Dict[str, Any],
+        context: Dict[str, Any],
+        state: DialogueState
+    ) -> Dict[str, Any]:
+        """Handle category browsing requests"""
+        customer_message = context.get("message", "")
+        customer_id = context.get("customer_id")
+
+        result = product_inquiry_service.handle_product_query(
+            customer_message, entities, customer_id
+        )
+
+        return {
+            "action": ActionType.RESPOND,
+            "response_text_bn": result["response_text"],
+            "metadata": {
+                "auto_responded": True,
+                "query_type": "category_browse",
+                **result.get("metadata", {})
             }
         }
     

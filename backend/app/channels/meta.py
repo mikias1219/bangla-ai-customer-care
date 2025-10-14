@@ -12,23 +12,28 @@ import httpx
 
 from app.services.nlu_service import nlu_service
 from app.services.dialogue_manager import dialogue_manager
+from app.core.config import settings
 
 router = APIRouter()
 
 
-def get_env(key: str, default: str = "") -> str:
-    return os.getenv(key, default)
+# Use new configuration settings
+META_VERIFY_TOKEN = settings.facebook_verify_token or "verify-token"
+META_APP_SECRET = settings.facebook_app_secret
 
+# Facebook Messenger
+FACEBOOK_APP_ID = settings.facebook_app_id
+FACEBOOK_APP_SECRET = settings.facebook_app_secret
+FACEBOOK_PAGE_ACCESS_TOKEN = settings.facebook_page_access_token
+FACEBOOK_VERIFY_TOKEN = settings.facebook_verify_token
 
-META_VERIFY_TOKEN = get_env("META_VERIFY_TOKEN", "verify-token")
-# Messenger
-MESSENGER_PAGE_ID = get_env("MESSENGER_PAGE_ID", "")
-MESSENGER_PAGE_ACCESS_TOKEN = get_env("MESSENGER_PAGE_ACCESS_TOKEN", "")
-# Instagram
-INSTAGRAM_BUSINESS_ID = get_env("INSTAGRAM_BUSINESS_ID", "")
-INSTAGRAM_ACCESS_TOKEN = get_env("INSTAGRAM_ACCESS_TOKEN", "")
-# Optional app secret for signature verification
-META_APP_SECRET = get_env("META_APP_SECRET", "")
+# Instagram Business
+INSTAGRAM_BUSINESS_ID = settings.instagram_business_id
+INSTAGRAM_ACCESS_TOKEN = settings.instagram_access_token
+
+# Legacy support
+MESSENGER_PAGE_ID = FACEBOOK_PAGE_ACCESS_TOKEN  # Keep backward compatibility
+MESSENGER_PAGE_ACCESS_TOKEN = FACEBOOK_PAGE_ACCESS_TOKEN
 
 
 def verify_signature(x_hub_signature_256: Optional[str], body: bytes) -> bool:
@@ -117,7 +122,12 @@ async def webhook_receive(request: Request, x_hub_signature_256: Optional[str] =
         dm_res = dialogue_manager.decide(
             intent=nlu_res["intent"],
             entities=nlu_res["entities"],
-            context={"channel": platform}
+            context={
+                "channel": platform,
+                "customer_id": user_id,
+                "message": text,
+                "from": user_id
+            }
         )
         reply = dm_res["response_text_bn"]
 

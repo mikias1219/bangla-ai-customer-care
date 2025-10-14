@@ -9,8 +9,15 @@ import hashlib
 
 from app.services.nlu_service import nlu_service
 from app.services.dialogue_manager import dialogue_manager
+from app.core.config import settings
 
 router = APIRouter()
+
+# Use new configuration settings
+WHATSAPP_BUSINESS_ID = settings.whatsapp_business_id
+WHATSAPP_ACCESS_TOKEN = settings.whatsapp_access_token
+WHATSAPP_VERIFY_TOKEN = settings.whatsapp_verify_token
+WHATSAPP_PHONE_NUMBER_ID = settings.whatsapp_phone_number_id
 
 
 class WhatsAppAdapter:
@@ -71,17 +78,23 @@ class WhatsAppAdapter:
     async def process_message(self, message_data: Dict[str, Any]) -> str:
         """Process incoming message through NLU and DM"""
         text = message_data.get("text", "")
-        
+        customer_id = message_data.get("from", "unknown")
+
         # NLU resolution
         nlu_result = nlu_service.resolve(text)
-        
-        # Dialogue decision
+
+        # Dialogue decision with enhanced context
         dm_result = dialogue_manager.decide(
             intent=nlu_result["intent"],
             entities=nlu_result["entities"],
-            context={"channel": "whatsapp", "from": message_data.get("from")}
+            context={
+                "channel": "whatsapp",
+                "customer_id": customer_id,
+                "message": text,
+                "from": message_data.get("from")
+            }
         )
-        
+
         return dm_result["response_text_bn"]
 
 
@@ -93,12 +106,11 @@ async def whatsapp_webhook_verify(
     hub_challenge: str = None
 ):
     """Verify WhatsApp webhook"""
-    # In production, get verify_token from settings
-    verify_token = "your_verify_token"
-    
+    verify_token = WHATSAPP_VERIFY_TOKEN or "your_verify_token"
+
     if hub_mode == "subscribe" and hub_verify_token == verify_token:
-        return int(hub_challenge)
-    
+        return int(hub_challenge or 0)
+
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
@@ -106,19 +118,22 @@ async def whatsapp_webhook_verify(
 async def whatsapp_webhook_receive(request: Request):
     """Receive WhatsApp messages"""
     payload = await request.json()
-    
-    # In production, initialize adapter with real credentials
-    adapter = WhatsAppAdapter(
-        phone_number_id="your_phone_number_id",
-        access_token="your_access_token",
-        verify_token="your_verify_token"
-    )
-    
-    message_data = adapter.parse_message(payload)
-    
-    if message_data:
-        response_text = await adapter.process_message(message_data)
-        await adapter.send_message(message_data["from"], response_text)
-    
+
+    # Initialize adapter with configuration settings
+    if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN:
+        adapter = WhatsAppAdapter(
+            phone_number_id=WHATSAPP_PHONE_NUMBER_ID,
+            access_token=WHATSAPP_ACCESS_TOKEN,
+            verify_token=WHATSAPP_VERIFY_TOKEN or "default_verify_token"
+        )
+
+        message_data = adapter.parse_message(payload)
+
+        if message_data:
+            response_text = await adapter.process_message(message_data)
+            await adapter.send_message(message_data["from"], response_text)
+    else:
+        print("WhatsApp not configured - skipping message processing")
+
     return {"status": "ok"}
 

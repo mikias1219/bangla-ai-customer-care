@@ -35,6 +35,10 @@ export function Nav({ current, onNavigate }: { current: Page; onNavigate: (p: Pa
       {section('Dashboard')}
       {link('overview', 'Overview')}
       {link('test', 'Test Console')}
+      {section('E-Commerce')}
+      {link('products', '🛍️ Products')}
+      {link('orders', '📦 Orders')}
+      {link('customers', '👥 Customers')}
       {section('NLU Management')}
       {link('intents', 'Intents')}
       {link('entities', 'Entities')}

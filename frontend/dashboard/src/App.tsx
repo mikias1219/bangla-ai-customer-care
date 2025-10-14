@@ -7,8 +7,11 @@ import { Entities } from './pages/Entities'
 import { Conversations } from './pages/Conversations'
 import { Templates } from './pages/Templates'
 import { Inbox } from './pages/Inbox'
+import { Products } from './pages/Products'
+import { Orders } from './pages/Orders'
+import { Customers } from './pages/Customers'
 
-export type Page = 'overview' | 'test' | 'intents' | 'entities' | 'conversations' | 'templates' | 'inbox'
+export type Page = 'overview' | 'test' | 'intents' | 'entities' | 'conversations' | 'templates' | 'inbox' | 'products' | 'orders' | 'customers'
 
 export default function App() {
   const [page, setPage] = useState<Page>('overview')
@@ -24,6 +27,9 @@ export default function App() {
         {page === 'conversations' && <Conversations />}
         {page === 'templates' && <Templates />}
         {page === 'inbox' && <Inbox />}
+        {page === 'products' && <Products />}
+        {page === 'orders' && <Orders />}
+        {page === 'customers' && <Customers />}
       </main>
     </div>
   )

@@ -78,7 +78,7 @@ class Conversation(Base):
     status = Column(Enum(ConversationStatus), default=ConversationStatus.active)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     ended_at = Column(DateTime(timezone=True))
-    conversation_metadata = Column(JSON)  # Store channel-specific metadata
+    conversation_data = Column(JSON)  # Store channel-specific metadata
 
     # Relationships
     turns = relationship("Turn", back_populates="conversation", cascade="all, delete-orphan")
@@ -98,7 +98,7 @@ class Turn(Base):
     nlu_confidence = Column(Float)
     handoff_flag = Column(Boolean, default=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    turn_metadata = Column(JSON)
+    turn_data = Column(JSON)
 
     # Relationships
     conversation = relationship("Conversation", back_populates="turns")
@@ -159,4 +159,171 @@ class TrainingJob(Base):
     error_message = Column(Text)
     config = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrderStatus(str, enum.Enum):
+    pending = "pending"
+    confirmed = "confirmed"
+    processing = "processing"
+    shipped = "shipped"
+    delivered = "delivered"
+    cancelled = "cancelled"
+    refunded = "refunded"
+
+
+class PaymentStatus(str, enum.Enum):
+    pending = "pending"
+    paid = "paid"
+    failed = "failed"
+    refunded = "refunded"
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text)
+    sku = Column(String(100), unique=True, nullable=False, index=True)
+    price = Column(Float, nullable=False)
+    currency = Column(String(10), default="BDT")
+    category = Column(String(100))
+    brand = Column(String(100))
+    stock_quantity = Column(Integer, default=0)
+    min_stock_level = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    weight = Column(Float)  # in kg
+    dimensions = Column(JSON)  # {"length": 10, "width": 5, "height": 2}
+    images = Column(JSON)  # Array of image URLs
+    tags = Column(JSON)  # Array of tags
+    product_metadata = Column(JSON)  # Additional product data
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    order_items = relationship("OrderItem", back_populates="product")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(String(100), unique=True, nullable=False, index=True)  # External ID from channels
+    name = Column(String(255))
+    email = Column(String(255), index=True)
+    phone = Column(String(50))
+    channel = Column(String(50))  # whatsapp, messenger, instagram, etc.
+    channel_user_id = Column(String(100))  # User ID from the channel
+    profile_data = Column(JSON)  # Channel-specific profile information
+    preferences = Column(JSON)  # Customer preferences
+    tags = Column(JSON)  # Customer tags
+    total_orders = Column(Integer, default=0)
+    total_spent = Column(Float, default=0.0)
+    last_order_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    orders = relationship("Order", back_populates="customer")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_number = Column(String(50), unique=True, nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"))
+
+    # Order details
+    status = Column(Enum(OrderStatus), default=OrderStatus.pending)
+    payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.pending)
+    currency = Column(String(10), default="BDT")
+
+    # Amounts
+    subtotal = Column(Float, nullable=False)
+    tax_amount = Column(Float, default=0.0)
+    discount_amount = Column(Float, default=0.0)
+    shipping_amount = Column(Float, default=0.0)
+    total_amount = Column(Float, nullable=False)
+
+    # Shipping
+    shipping_address = Column(JSON)
+    shipping_method = Column(String(100))
+    tracking_number = Column(String(100))
+
+    # Payment
+    payment_method = Column(String(50))
+    payment_reference = Column(String(100))
+    payment_gateway = Column(String(50))
+
+    # Dates
+    ordered_at = Column(DateTime(timezone=True), server_default=func.now())
+    confirmed_at = Column(DateTime(timezone=True))
+    shipped_at = Column(DateTime(timezone=True))
+    delivered_at = Column(DateTime(timezone=True))
+    cancelled_at = Column(DateTime(timezone=True))
+
+    # Additional data
+    notes = Column(Text)
+    order_metadata = Column(JSON)
+
+    # Relationships
+    customer = relationship("Customer", back_populates="orders")
+    conversation = relationship("Conversation", backref="orders")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+
+    # Item details
+    product_name = Column(String(255), nullable=False)  # Snapshot of product name
+    product_sku = Column(String(100), nullable=False)   # Snapshot of product SKU
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    total_price = Column(Float, nullable=False)
+
+    # Additional data
+    product_options = Column(JSON)  # Size, color, etc.
+    notes = Column(Text)
+    item_metadata = Column(JSON)
+
+    # Relationships
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product", back_populates="order_items")
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(String(100), unique=True, nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+
+    # Transaction details
+    amount = Column(Float, nullable=False)
+    currency = Column(String(10), default="BDT")
+    transaction_type = Column(String(50))  # payment, refund, chargeback
+    status = Column(String(50))  # pending, completed, failed, cancelled
+    gateway = Column(String(50))  # stripe, paypal, bKash, etc.
+    gateway_transaction_id = Column(String(100))
+    gateway_response = Column(JSON)
+
+    # Dates
+    initiated_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    failed_at = Column(DateTime(timezone=True))
+
+    # Additional data
+    notes = Column(Text)
+    transaction_metadata = Column(JSON)
+
+    # Relationships
+    order = relationship("Order", backref="transactions")
 

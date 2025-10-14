@@ -4,15 +4,90 @@ A full-scale Bangla AI customer care platform with NLU, ASR, TTS, multi-channel 
 
 ## Features
 
+### AI & Language Processing
 - **Bangla NLU**: Intent classification and entity extraction using BanglaBERT/IndicBERT
+- **OpenAI Integration**: GPT-powered responses, sentiment analysis, translation
 - **Bangla ASR**: Speech recognition with Whisper optimized for Bangla
 - **Bangla TTS**: Natural text-to-speech (Google/Azure/Coqui)
-- **Multi-channel**: Voice (IVR), WhatsApp, Messenger, Web chat, Mobile
+- **Multi-language Support**: Templates and responses in multiple languages
+
+### Communication Channels
+- **Multi-channel**: Voice (IVR), WhatsApp, Messenger, Instagram, Web chat, Mobile
+- **Unified Inbox**: Single interface for all customer communications
+- **Facebook Messenger**: Business messaging integration
+- **Instagram Business**: Direct messaging and commerce
+- **WhatsApp Business**: Full commerce and messaging support
+
+### E-Commerce & Business Features
+- **Product Management**: Catalog management with pricing and inventory
+- **Order Management**: Complete order lifecycle with status tracking
+- **Customer Management**: Customer profiles, history, and analytics
+- **Transaction Processing**: Payment gateway integration support
+- **Business Intelligence**: Revenue analytics, customer insights
+
+### Core Platform
 - **Dialogue Management**: State tracking, slot filling, context-aware responses
 - **Backend Integration**: Connect to CRM/ERP/databases for real-time data
 - **Human Handoff**: Seamless escalation to human agents
-- **Admin Dashboard**: Manage intents, entities, templates, view conversations, analytics
+- **Admin Dashboard**: Manage intents, entities, templates, products, orders, conversations, analytics
 - **Continuous Learning**: Collect failed queries, retrain models
+
+## AI Agent Setup & Demo
+
+### 🤖 Instant AI Responses to Customer Queries
+
+The AI agent instantly responds to customer messages by checking the database, just like a human agent would:
+
+**Example Customer Queries & AI Responses:**
+
+```
+Customer: "iPhone 15 Pro er dam koto?"
+🤖 AI: "**iPhone 15 Pro**
+💰 দাম: BDT 1,299.99
+📂 ক্যাটাগরি: Smartphones
+🏷️ ব্র্যান্ড: Apple
+✅ স্টকে আছে (25 পিস)
+
+কিনতে চান? 'অর্ডার করুন' বলুন।"
+
+Customer: "AirPods Pro ache?"
+🤖 AI: "❌ **AirPods Pro** বর্তমানে স্টকে নেই।
+আপনাকে notify করব যখন স্টকে আসবে?"
+```
+
+### Setting Up AI Agent
+
+1. **Add Sample Products:**
+```bash
+cd backend
+python scripts/add_sample_products.py
+```
+
+2. **Test AI Responses:**
+```bash
+python scripts/demo_ai_agent.py
+```
+
+3. **Configure API Keys** in `.env`:
+```bash
+# OpenAI for enhanced responses
+BANG_OPENAI_API_KEY=your-openai-key
+
+# Social Media APIs
+BANG_WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
+BANG_FACEBOOK_PAGE_ACCESS_TOKEN=your-facebook-token
+# ... etc
+```
+
+### Supported Query Types
+
+The AI agent automatically handles:
+- **Price queries**: "iPhone er dam koto?" / "price of laptop?"
+- **Availability**: "stock ache?" / "available?"
+- **Product info**: "details" / "about" / "features"
+- **Recommendations**: "suggest" / "best" / "recommend"
+- **Categories**: "laptop category" / "smartphones"
+- **Orders**: "buy" / "order" / "purchase"
 
 ## Quick Start with Docker
 
@@ -22,6 +97,9 @@ docker-compose up -d
 
 # Initialize database with seed data
 docker-compose exec backend python scripts/init_db.py
+
+# Add sample products for AI agent demo
+docker-compose exec backend python scripts/add_sample_products.py
 
 # Access services
 # - Dashboard: http://localhost:5173
