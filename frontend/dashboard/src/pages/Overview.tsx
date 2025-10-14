@@ -12,18 +12,13 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider,
   useTheme
 } from '@mui/material'
 import {
   ChatBubbleLeftRightIcon,
   ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   CpuChipIcon as CpuIcon,
-  ServerIcon,
-  ChartBarIcon,
-  UserGroupIcon
+  ChartBarIcon
 } from '@heroicons/react/24/outline'
 
 interface AnalyticsData {
@@ -155,7 +150,7 @@ export function Overview() {
                   </Typography>
                 </Box>
                 <ClockIcon style={{ width: 32, height: 32, color: theme.palette.success.main }} />
-              </CardContent>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -173,7 +168,7 @@ export function Overview() {
                   </Typography>
                 </Box>
                 <ChartBarIcon style={{ width: 32, height: 32, color: theme.palette.warning.main }} />
-              </CardContent>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -191,7 +186,7 @@ export function Overview() {
                   </Typography>
                 </Box>
                 <CpuIcon style={{ width: 32, height: 32, color: theme.palette.info.main }} />
-              </CardContent>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
