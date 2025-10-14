@@ -190,36 +190,39 @@ def seed_admin_user(db):
     """Create default admin user"""
     print("Creating admin user...")
 
+    # Delete existing admin user if any
     existing = db.query(User).filter(User.username == "admin").first()
-    if not existing:
-        try:
-            admin = User(
-                username="admin",
-                email="admin@bangla-ai.local",
-                hashed_password=get_password_hash("admin123"),
-                full_name="System Administrator",
-                role="admin",
-                is_active=True
-            )
-            db.add(admin)
-            db.commit()
-            print("✓ Admin user created (username: admin, password: admin123)")
-        except Exception as e:
-            print(f"⚠️  Could not create admin user with password: {e}")
-            print("Creating admin user without password (set via dashboard later)")
-            admin = User(
-                username="admin",
-                email="admin@bangla-ai.local",
-                hashed_password="",  # Empty password
-                full_name="System Administrator",
-                role="admin",
-                is_active=True
-            )
-            db.add(admin)
-            db.commit()
-            print("✓ Admin user created (username: admin, no password set)")
-    else:
-        print("✓ Admin user already exists")
+    if existing:
+        db.delete(existing)
+        db.commit()
+        print("✓ Removed existing admin user")
+
+    try:
+        admin = User(
+            username="admin",
+            email="admin@bangla-ai.local",
+            hashed_password=get_password_hash("admin123"),
+            full_name="System Administrator",
+            role="admin",
+            is_active=True
+        )
+        db.add(admin)
+        db.commit()
+        print("✓ Admin user created (username: admin, password: admin123)")
+    except Exception as e:
+        print(f"⚠️  Could not create admin user with password: {e}")
+        print("Creating admin user without password (set via dashboard later)")
+        admin = User(
+            username="admin",
+            email="admin@bangla-ai.local",
+            hashed_password="",  # Empty password
+            full_name="System Administrator",
+            role="admin",
+            is_active=True
+        )
+        db.add(admin)
+        db.commit()
+        print("✓ Admin user created (username: admin, no password set)")
 
 
 def main():
