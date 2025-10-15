@@ -125,7 +125,7 @@ sudo tee /etc/logrotate.d/bdchatpro > /dev/null <<EOF
     notifempty
     create 644 $USER $USER
     postrotate
-        docker compose -f /opt/bdchatpro/docker-compose.prod.yml logs -f > /dev/null 2>&1 || true
+        docker compose -f /opt/bdchatpro/deploy/docker-compose.prod.yml logs -f > /dev/null 2>&1 || true
     endscript
 }
 EOF
@@ -186,9 +186,9 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/bdchatpro
 User=$USER
-ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
-ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
-ExecReload=/usr/bin/docker compose -f docker-compose.prod.yml restart
+ExecStart=/usr/bin/docker compose -f deploy/docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f deploy/docker-compose.prod.yml down
+ExecReload=/usr/bin/docker compose -f deploy/docker-compose.prod.yml restart
 
 [Install]
 WantedBy=multi-user.target
@@ -209,7 +209,7 @@ DATE=\$(date +%Y%m%d_%H%M%S)
 mkdir -p \$BACKUP_DIR
 
 # Backup database
-docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U bangla bangla_ai > \$BACKUP_DIR/db_backup_\$DATE.sql
+docker compose -f deploy/docker-compose.prod.yml exec -T postgres pg_dump -U bangla bangla_ai > \$BACKUP_DIR/db_backup_\$DATE.sql
 
 # Backup environment file
 cp /opt/bdchatpro/.env \$BACKUP_DIR/env_backup_\$DATE
@@ -243,7 +243,7 @@ echo "• Regularly update the system"
 echo "• Monitor logs: sudo journalctl -u bdchatpro -f"
 echo ""
 echo "📊 Monitoring:"
-echo "• Application logs: docker compose -f docker-compose.prod.yml logs -f"
+echo "• Application logs: docker compose -f deploy/docker-compose.prod.yml logs -f"
 echo "• Nginx logs: sudo tail -f /var/log/nginx/bdchatpro.access.log"
 echo "• System monitoring: htop or sudo systemctl status bdchatpro"
 echo ""
@@ -251,4 +251,4 @@ echo "🆘 Troubleshooting:"
 echo "• Restart services: sudo systemctl restart bdchatpro"
 echo "• View service status: sudo systemctl status bdchatpro"
 echo "• Check Docker: docker ps"
-echo "• View logs: docker compose -f docker-compose.prod.yml logs"
+echo "• View logs: docker compose -f deploy/docker-compose.prod.yml logs"

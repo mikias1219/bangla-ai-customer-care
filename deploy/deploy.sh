@@ -28,11 +28,11 @@ fi
 
 echo ""
 echo "📦 Pulling latest images from ${REGISTRY}/${OWNER}"
-docker compose -f docker-compose.prod.yml pull || echo "⚠️  Some images not found, using local builds"
+docker compose -f deploy/docker-compose.prod.yml pull || echo "⚠️  Some images not found, using local builds"
 
 echo ""
 echo "🐳 Starting services..."
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f deploy/docker-compose.prod.yml up -d
 
 echo ""
 echo "⏳ Waiting for services to be ready..."
@@ -40,15 +40,15 @@ sleep 15
 
 echo ""
 echo "🗄️  Initializing database..."
-docker compose -f docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed, continuing..."
+docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed, continuing..."
 
 echo ""
 echo "📱 Adding sample products for AI agent demo..."
-docker compose -f docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed, continuing..."
+docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed, continuing..."
 
 echo ""
 echo "📊 Services status:"
-docker compose -f docker-compose.prod.yml ps
+docker compose -f deploy/docker-compose.prod.yml ps
 
 echo ""
 echo "✅ Deployment complete!"
@@ -76,9 +76,9 @@ echo "   4. Configure social media webhooks if needed"
 echo "   5. Test the application thoroughly"
 echo ""
 echo "🆘 Troubleshooting:"
-echo "   View logs: docker compose -f docker-compose.prod.yml logs -f"
-echo "   Restart:   docker compose -f docker-compose.prod.yml restart"
-echo "   Stop:      docker compose -f docker-compose.prod.yml down"
+echo "   View logs: docker compose -f deploy/docker-compose.prod.yml logs -f"
+echo "   Restart:   docker compose -f deploy/docker-compose.prod.yml restart"
+echo "   Stop:      docker compose -f deploy/docker-compose.prod.yml down"
 echo ""
 echo "🎉 Your Bangla AI customer service platform is now live!"
 

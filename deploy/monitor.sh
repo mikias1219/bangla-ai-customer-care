@@ -123,12 +123,12 @@ run_checks() {
 
     # Check database connectivity
     check_service "database" \
-        "docker compose -f docker-compose.prod.yml exec -T backend python -c 'import os; from sqlalchemy import create_engine; engine = create_engine(os.getenv(\"BANG_DATABASE_URL\")); engine.connect().close()' 2>/dev/null" \
+        "docker compose -f deploy/docker-compose.prod.yml exec -T backend python -c 'import os; from sqlalchemy import create_engine; engine = create_engine(os.getenv(\"BANG_DATABASE_URL\")); engine.connect().close()' 2>/dev/null" \
         "Database connectivity failed - cannot connect to PostgreSQL"
 
     # Check Redis connectivity
     check_service "redis" \
-        "docker compose -f docker-compose.prod.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG" \
+        "docker compose -f deploy/docker-compose.prod.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG" \
         "Redis connectivity failed - Redis service is not responding"
 
     # Check SSL certificate expiry
@@ -157,15 +157,15 @@ run_checks() {
     fi
 
     # Check Docker services
-    running_containers=$(docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | wc -l)
-    total_containers=$(docker compose -f docker-compose.prod.yml ps --services | wc -l)
+    running_containers=$(docker compose -f deploy/docker-compose.prod.yml ps --services --filter "status=running" | wc -l)
+    total_containers=$(docker compose -f deploy/docker-compose.prod.yml ps --services | wc -l)
 
     if [ "$running_containers" -ne "$total_containers" ]; then
         log_alert "$running_containers/$total_containers Docker services running - some services are down"
     fi
 
     # Check for error logs
-    error_count=$(docker compose -f docker-compose.prod.yml logs --since 1h 2>&1 | grep -i error | wc -l)
+    error_count=$(docker compose -f deploy/docker-compose.prod.yml logs --since 1h 2>&1 | grep -i error | wc -l)
     if [ "$error_count" -gt 10 ]; then
         log_warning "$error_count errors found in logs in the last hour"
     fi

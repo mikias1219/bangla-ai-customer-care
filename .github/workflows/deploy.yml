@@ -107,7 +107,30 @@ jobs:
           # Copy production environment if not exists
           if [ ! -f .env ]; then
             cp deploy/env.prod .env
-            echo "⚠️  WARNING: .env file created from template. Please configure secrets!"
+            echo "⚠️  WARNING: .env file created from template."
+          fi
+
+          # Helper to upsert key=value in .env safely
+          upsert_env() {
+            KEY="$1"; VAL="$2"
+            if grep -q "^${KEY}=" .env; then
+              sed -i "s|^${KEY}=.*|${KEY}=${VAL}|" .env
+            else
+              echo "${KEY}=${VAL}" >> .env
+            fi
+          }
+
+          # Inject deployment secrets and config
+          upsert_env REGISTRY "ghcr.io"
+          upsert_env OWNER "${{ github.repository_owner }}"
+          upsert_env POSTGRES_PASSWORD "${{ secrets.POSTGRES_PASSWORD }}"
+          upsert_env BANG_SECRET_KEY "${{ secrets.BANG_SECRET_KEY }}"
+          upsert_env BANG_OPENAI_API_KEY "${{ secrets.BANG_OPENAI_API_KEY }}"
+          upsert_env BANG_OPENAI_MODEL "gpt-4o-mini"
+          upsert_env BANG_CORS_ORIGINS '["https://bdchatpro.com","https://www.bdchatpro.com"]'
+          # Optional monitoring/admin
+          if [ -n "${{ secrets.GRAFANA_ADMIN_PASSWORD }}" ]; then
+            upsert_env GRAFANA_ADMIN_PASSWORD "${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
           fi
 
           # Update Docker images
@@ -121,22 +144,22 @@ jobs:
           docker tag "$DASHBOARD_REGISTRY:latest" bangla-dashboard:latest
 
           # Stop existing containers
-          docker compose -f docker-compose.prod.yml down || true
+          docker compose -f deploy/docker-compose.prod.yml down || true
 
           # Start services
-          docker compose -f docker-compose.prod.yml up -d
+          docker compose -f deploy/docker-compose.prod.yml up -d
 
           # Wait for services to be ready
           sleep 30
 
           # Run database migrations and setup
-          docker compose -f docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed"
+          docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed"
 
           # Add sample products for demo
-          docker compose -f docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed"
+          docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed"
 
           # Check service status
-          docker compose -f docker-compose.prod.yml ps
+          docker compose -f deploy/docker-compose.prod.yml ps
 
           # Health check
           curl -f https://bdchatpro.com/health || echo "⚠️  Health check failed - services may still be starting"
@@ -205,7 +228,7 @@ jobs:
           fi
 
           # Restart services
-          docker compose -f docker-compose.prod.yml down
-          docker compose -f docker-compose.prod.yml up -d
+          docker compose -f deploy/docker-compose.prod.yml down
+          docker compose -f deploy/docker-compose.prod.yml up -d
 
           echo "🔄 Rollback completed"

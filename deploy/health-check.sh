@@ -112,9 +112,9 @@ fi
 
 # Check Docker services
 log_info "Checking Docker services..."
-if command -v docker &> /dev/null && docker compose -f docker-compose.prod.yml ps --quiet | grep -q .; then
-    running_services=$(docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | wc -l)
-    total_services=$(docker compose -f docker-compose.prod.yml ps --services | wc -l)
+if command -v docker &> /dev/null && docker compose -f deploy/docker-compose.prod.yml ps --quiet | grep -q .; then
+    running_services=$(docker compose -f deploy/docker-compose.prod.yml ps --services --filter "status=running" | wc -l)
+    total_services=$(docker compose -f deploy/docker-compose.prod.yml ps --services | wc -l)
 
     if [ "$running_services" -eq "$total_services" ]; then
         check_result "Docker Services" 0 "All $total_services services running"
@@ -127,7 +127,7 @@ fi
 
 # Check database connectivity (if backend is running)
 log_info "Checking database connectivity..."
-if docker compose -f docker-compose.prod.yml exec -T backend python -c "
+if docker compose -f deploy/docker-compose.prod.yml exec -T backend python -c "
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -148,7 +148,7 @@ fi
 
 # Check Redis connectivity
 log_info "Checking Redis connectivity..."
-if docker compose -f docker-compose.prod.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
+if docker compose -f deploy/docker-compose.prod.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
     check_result "Redis" 0 "Redis connection successful"
 else
     check_result "Redis" 1 "Redis connection failed"
@@ -203,9 +203,9 @@ else
     log_error "❌ $CHECKS_FAILED health checks failed. Please investigate."
     echo ""
     echo "🔧 Troubleshooting Tips:"
-    echo "• Check Docker logs: docker compose -f docker-compose.prod.yml logs -f"
+    echo "• Check Docker logs: docker compose -f deploy/docker-compose.prod.yml logs -f"
     echo "• Check Nginx logs: sudo tail -f /var/log/nginx/bdchatpro.access.log"
-    echo "• Restart services: docker compose -f docker-compose.prod.yml restart"
+    echo "• Restart services: docker compose -f deploy/docker-compose.prod.yml restart"
     echo "• Check system resources: htop"
     echo "• Test individual endpoints manually"
     exit 1
