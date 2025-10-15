@@ -29,9 +29,16 @@ jobs:
       - name: Prepare SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          # Write SSH key with proper formatting
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          # Debug: Check key format (first/last line only, no sensitive data)
+          echo "Key begins with: $(head -n1 ~/.ssh/id_rsa)"
+          echo "Key ends with: $(tail -n1 ~/.ssh/id_rsa)"
+          # Add known hosts
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || echo "Warning: ssh-keyscan failed"
+          # Test SSH connection with verbose output
+          ssh -vv -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'" 2>&1 || echo "SSH test failed - will attempt deployment anyway"
 
       - name: Prepare remote directories
         run: |
