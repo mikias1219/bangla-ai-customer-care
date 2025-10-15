@@ -27,33 +27,35 @@ jobs:
           npm ci || npm i
           VITE_API_BASE=https://${{ env.DOMAIN }} npm run build
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
-
-      - name: Add VPS to known_hosts
+      - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          # Write the SSH key to file
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Add VPS to known_hosts
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          # Test SSH connection
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"
           cat ~/.ssh/known_hosts
 
       - name: Prepare remote directories
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "mkdir -p '${{ secrets.VPS_PATH }}' /tmp/bangla_upload"
 
       - name: Upload backend, deploy scripts, and built frontend
         run: |
-          rsync -avz --delete backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
-          rsync -avz --delete deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
-          rsync -avz --delete frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
 
       - name: Remote deploy & restart
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s <<'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s <<'ENDSSH'
             set -euo pipefail
 
             DOMAIN="bdchatpro.com"
@@ -104,5 +106,5 @@ jobs:
       - name: Issue HTTPS certificate (optional)
         if: ${{ vars.LETSENCRYPT_EMAIL != '' }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "sudo certbot --nginx -n --agree-tos -m '${{ vars.LETSENCRYPT_EMAIL }}' -d ${{ env.DOMAIN }} -d www.${{ env.DOMAIN }} || true"
