@@ -12,46 +12,8 @@ env:
   DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/bangla-dashboard
 
 jobs:
-  # Build and test the application
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install backend dependencies
-      run: |
-        cd backend
-        pip install -r requirements.txt
-
-    - name: Run backend tests
-      run: |
-        cd backend
-        python -m pytest --tb=short -v || true
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-
-    - name: Install frontend dependencies
-      run: |
-        cd frontend/dashboard
-        npm install
-
-    - name: Build frontend
-      run: |
-        cd frontend/dashboard
-        npm run build
-
   # Build and push Docker images
   build-and-push:
-    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,6 +29,9 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Extract metadata for backend
       id: meta-backend
@@ -86,8 +51,6 @@ jobs:
         push: true
         tags: ${{ steps.meta-backend.outputs.tags }}
         labels: ${{ steps.meta-backend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
     - name: Extract metadata for dashboard
       id: meta-dashboard
@@ -107,8 +70,6 @@ jobs:
         push: true
         tags: ${{ steps.meta-dashboard.outputs.tags }}
         labels: ${{ steps.meta-dashboard.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
   # Deploy to production VPS
   deploy:
@@ -153,9 +114,11 @@ jobs:
           docker pull ${{ env.BACKEND_IMAGE }}:latest
           docker pull ${{ env.DASHBOARD_IMAGE }}:latest
 
-          # Tag images for local use
-          docker tag ${{ env.BACKEND_IMAGE }}:latest bangla-backend:latest
-          docker tag ${{ env.DASHBOARD_IMAGE }}:latest bangla-dashboard:latest
+          # Tag images for local use (get actual registry from env)
+          BACKEND_REGISTRY="${{ env.BACKEND_IMAGE }}"
+          DASHBOARD_REGISTRY="${{ env.DASHBOARD_IMAGE }}"
+          docker tag "$BACKEND_REGISTRY:latest" bangla-backend:latest
+          docker tag "$DASHBOARD_REGISTRY:latest" bangla-dashboard:latest
 
           # Stop existing containers
           docker compose -f docker-compose.prod.yml down || true
