@@ -13,97 +13,96 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node and build frontend
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      - name: Build dashboard
+
+      - name: Build frontend dashboard
         run: |
           cd frontend/dashboard
           npm ci || npm i
           VITE_API_BASE=https://${{ env.DOMAIN }} npm run build
 
-      - name: Prepare SSH
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.7.1
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known_hosts
         run: |
           mkdir -p ~/.ssh
-          # Write SSH key with proper formatting
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          # Debug: Check key format (first/last line only, no sensitive data)
-          echo "Key begins with: $(head -n1 ~/.ssh/id_rsa)"
-          echo "Key ends with: $(tail -n1 ~/.ssh/id_rsa)"
-          # Add known hosts
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || echo "Warning: ssh-keyscan failed"
-          # Test SSH connection with verbose output
-          ssh -vv -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'" 2>&1 || echo "SSH test failed - will attempt deployment anyway"
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          cat ~/.ssh/known_hosts
 
       - name: Prepare remote directories
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p \"${{ secrets.VPS_PATH }}\" /tmp/bangla_upload"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "mkdir -p '${{ secrets.VPS_PATH }}' /tmp/bangla_upload"
 
-      - name: Upload backend, deploy assets, and built frontend
+      - name: Upload backend, deploy scripts, and built frontend
         run: |
-          scp -i ~/.ssh/id_rsa -r backend ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/
-          scp -i ~/.ssh/id_rsa -r deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/
-          scp -i ~/.ssh/id_rsa -r frontend/dashboard/dist ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/
+          rsync -avz --delete backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
+          rsync -avz --delete deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
+          rsync -avz --delete frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
 
       - name: Remote deploy & restart
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash -s" << 'EOF'
-          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s <<'ENDSSH'
+            set -euo pipefail
 
-          DOMAIN='${{ env.DOMAIN }}'
-          WEBROOT='${{ env.WEBROOT }}'
-          VPS_PATH='${{ secrets.VPS_PATH }}'
-          VPS_USER='${{ secrets.VPS_USER }}'
-          OPENAI_API_KEY='${OPENAI_API_KEY}'
+            DOMAIN="bdchatpro.com"
+            WEBROOT="/var/www/bangla"
+            VPS_PATH="${{ secrets.VPS_PATH }}"
+            OPENAI_API_KEY="${OPENAI_API_KEY}"
 
-          sudo apt-get update
-          sudo apt-get install -y python3-venv python3-pip nginx
+            # Install required packages
+            sudo apt-get update
+            sudo apt-get install -y python3-venv python3-pip nginx rsync
 
-          # Move uploaded payload into place
-          sudo rsync -a /tmp/bangla_upload/backend/ "$VPS_PATH"/backend/
-          sudo rsync -a /tmp/bangla_upload/deploy/ "$VPS_PATH"/deploy/
-          sudo mkdir -p "$WEBROOT"
-          sudo rsync -az /tmp/bangla_upload/dist/ "$WEBROOT"/
+            # Move uploaded files
+            sudo rsync -a /tmp/bangla_upload/backend/ "$VPS_PATH"/backend/
+            sudo rsync -a /tmp/bangla_upload/deploy/ "$VPS_PATH"/deploy/
+            sudo mkdir -p "$WEBROOT"
+            sudo rsync -az /tmp/bangla_upload/dist/ "$WEBROOT"/
 
-          # .env for backend
-          cat > "$VPS_PATH/.env" <<EOT
-          BANG_DATABASE_URL=sqlite:///./bangla.db
-          BANG_CORS_ORIGINS=["https://$DOMAIN","http://localhost:5173"]
-          BANG_OPENAI_API_KEY=$OPENAI_API_KEY
-          BANG_OPENAI_MODEL=gpt-4
-          EOT
+            # Create .env file
+            echo "BANG_DATABASE_URL=sqlite:///./bangla.db" > "$VPS_PATH/.env"
+            echo "BANG_CORS_ORIGINS=[\"https://bdchatpro.com\",\"http://localhost:5173\"]" >> "$VPS_PATH/.env"
+            echo "BANG_OPENAI_API_KEY=${OPENAI_API_KEY}" >> "$VPS_PATH/.env"
+            echo "BANG_OPENAI_MODEL=gpt-4" >> "$VPS_PATH/.env"
 
-          # Render systemd unit
-          sudo bash -c "sed -e 's#{{USER}}#'\"$VPS_USER\"'#g' -e 's#{{APP_PATH}}#'\"$VPS_PATH\"'#g' \"$VPS_PATH/deploy/systemd/bangla-backend.service\" > /etc/systemd/system/bangla-backend.service"
+            # Setup systemd service
+            sudo bash -c "sed -e 's#{{USER}}#${{ secrets.VPS_USER }}#g' -e 's#{{APP_PATH}}#${VPS_PATH}#g' $VPS_PATH/deploy/systemd/bangla-backend.service > /etc/systemd/system/bangla-backend.service"
 
-          # Backend venv + install
-          cd "$VPS_PATH/backend"
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          python scripts/init_db.py || true
-          deactivate
+            # Setup backend virtualenv and install dependencies
+            cd "$VPS_PATH/backend"
+            python3 -m venv .venv
+            . .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            python scripts/init_db.py || true
+            deactivate
 
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now bangla-backend
+            # Start backend service
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now bangla-backend
 
-          # Render nginx config
-          sudo bash -c "sed -e 's#{{DOMAIN}}#'\"$DOMAIN\"'#g' -e 's#{{WEBROOT}}#'\"$WEBROOT\"'#g' \"$VPS_PATH/deploy/nginx.bangla.conf\" > /etc/nginx/sites-available/bangla"
-          sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/bangla
-          sudo rm -f /etc/nginx/sites-enabled/default || true
-          sudo nginx -t
-          sudo systemctl reload nginx
-          EOF
+            # Setup Nginx
+            sudo bash -c "sed -e 's#{{DOMAIN}}#${DOMAIN}#g' -e 's#{{WEBROOT}}#${WEBROOT}#g' $VPS_PATH/deploy/nginx.bangla.conf > /etc/nginx/sites-available/bangla"
+            sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/bangla
+            sudo rm -f /etc/nginx/sites-enabled/default || true
+            sudo nginx -t
+            sudo systemctl reload nginx
+          ENDSSH
 
       - name: Issue HTTPS certificate (optional)
         if: ${{ vars.LETSENCRYPT_EMAIL != '' }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "sudo certbot --nginx -n --agree-tos -m '${{ vars.LETSENCRYPT_EMAIL }}' -d ${{ env.DOMAIN }} -d www.${{ env.DOMAIN }} || true"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "sudo certbot --nginx -n --agree-tos -m '${{ vars.LETSENCRYPT_EMAIL }}' -d ${{ env.DOMAIN }} -d www.${{ env.DOMAIN }} || true"
