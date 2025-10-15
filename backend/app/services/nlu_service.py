@@ -4,8 +4,9 @@ Uses BanglaBERT/IndicBERT for intent classification
 """
 from typing import Dict, Any, List, Optional
 import re
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
+AutoTokenizer = None
+AutoModelForSequenceClassification = None
+torch = None
 
 from app.core.config import settings
 
@@ -26,16 +27,26 @@ class NLUService:
         ]
         
     def load_model(self):
-        """Load the NLU model (lazy loading)"""
+        """Load the NLU model (lazy). Falls back to keyword rules if unavailable."""
+        global AutoTokenizer, AutoModelForSequenceClassification, torch
         if self.model is None:
-            print(f"Loading NLU model: {self.model_name}")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            # For now, using base model - in production, fine-tune on domain data
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_name,
-                num_labels=len(self.intent_labels)
-            )
-            self.model.eval()
+            try:
+                if AutoTokenizer is None:
+                    from transformers import AutoTokenizer as _AT, AutoModelForSequenceClassification as _AM
+                    AutoTokenizer = _AT
+                    AutoModelForSequenceClassification = _AM
+                import torch as _torch
+                torch = _torch
+                print(f"Loading NLU model: {self.model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_name,
+                    num_labels=len(self.intent_labels)
+                )
+                self.model.eval()
+            except Exception as e:
+                print(f"Transformers not available, using keyword-based NLU: {e}")
+                self.model = "rules"
     
     def extract_entities(self, text: str) -> Dict[str, Any]:
         """

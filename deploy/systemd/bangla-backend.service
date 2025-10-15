@@ -1,0 +1,17 @@
+[Unit]
+Description=Bangla AI Backend (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{APP_PATH}}/backend
+EnvironmentFile={{APP_PATH}}/.env
+ExecStart={{APP_PATH}}/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+

@@ -6,19 +6,17 @@ python-dotenv==1.0.1
 
 # Database
 sqlalchemy==2.0.23
-asyncpg==0.29.0
-psycopg2-binary==2.9.9
 alembic==1.13.1
 
 # Redis
 redis==5.0.1
 
-# AI/ML
-transformers==4.36.2
-torch==2.1.2
-sentencepiece==0.1.99
-openai-whisper==20231117
-TTS==0.22.0
+# AI/ML (optional, commented out for lightweight deploy)
+# transformers==4.36.2
+# torch==2.1.2
+# sentencepiece==0.1.99
+# openai-whisper==20231117
+# TTS==0.22.0
 
 # HTTP clients
 httpx==0.25.2

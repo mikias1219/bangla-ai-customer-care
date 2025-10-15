@@ -35,3 +35,6 @@ logs/
 # Build artifacts
 build/
 .next/
+backend/venv_run/
+.cursor/
+backend/bangla.db

@@ -35,6 +35,7 @@ def metrics() -> Response:
 
 
 @router.get("/analytics/overview")
+@router.get("/admin/analytics/overview")
 async def analytics_overview(db: AsyncSession = Depends(get_db)):
     """Analytics overview for dashboard"""
     try:
@@ -72,6 +73,7 @@ async def analytics_overview(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/analytics/conversations")
+@router.get("/admin/analytics/conversations")
 async def conversation_analytics(
     days: int = 7,
     channel: str = None,
@@ -117,6 +119,7 @@ async def conversation_analytics(
 
 
 @router.get("/analytics/ai-performance")
+@router.get("/admin/analytics/ai-performance")
 async def ai_performance_analytics(db: AsyncSession = Depends(get_db)):
     """AI performance and accuracy metrics"""
     try:

@@ -2,7 +2,6 @@
 ASR Service for multilingual speech recognition
 Uses OpenAI Whisper for all languages with auto-detection
 """
-import whisper
 import numpy as np
 from typing import Optional, Dict, Any
 
@@ -15,10 +14,15 @@ class ASRService:
         self.model = None
         
     def load_model(self):
-        """Load Whisper model (lazy loading)"""
+        """Load Whisper model (lazy loading). Falls back to mock if unavailable."""
         if self.model is None:
-            print(f"Loading Whisper model: {self.model_size}")
-            self.model = whisper.load_model(self.model_size)
+            try:
+                import whisper  # lazy import to avoid heavy dep at startup
+                print(f"Loading Whisper model: {self.model_size}")
+                self.model = whisper.load_model(self.model_size)
+            except Exception as e:
+                print(f"Whisper not available, falling back to mock ASR: {e}")
+                self.model = "mock"
     
     def transcribe(
         self,
@@ -47,12 +51,15 @@ class ASRService:
         # Use None for auto-detection, or specific language code
         whisper_language = None if language is None else language
 
-        result = self.model.transcribe(
-            audio_data,
-            language=whisper_language,
-            task="transcribe",
-            fp16=False  # Set to True if using GPU
-        )
+        if self.model == "mock":
+            result = {"text": "", "language": language or "unknown", "segments": []}
+        else:
+            result = self.model.transcribe(
+                audio_data,
+                language=whisper_language,
+                task="transcribe",
+                fp16=False  # Set to True if using GPU
+            )
 
         detected_language = result.get("language", language or "unknown")
 
@@ -79,11 +86,14 @@ class ASRService:
 
         whisper_language = None if language is None else language
 
-        result = self.model.transcribe(
-            audio_path,
-            language=whisper_language,
-            task="transcribe"
-        )
+        if self.model == "mock":
+            result = {"text": "", "language": language or "unknown"}
+        else:
+            result = self.model.transcribe(
+                audio_path,
+                language=whisper_language,
+                task="transcribe"
+            )
 
         detected_language = result.get("language", language or "unknown")
 

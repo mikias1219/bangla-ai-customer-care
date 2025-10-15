@@ -40,7 +40,9 @@ def create_app() -> FastAPI:
     # Core routers
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
-    app.include_router(metrics_router.router, tags=["metrics"])  # /metrics
+    # Metrics (expose both plain and /admin/* for dashboard compatibility)
+    app.include_router(metrics_router.router, tags=["metrics"])  # /metrics, /analytics/*
+    app.include_router(metrics_router.router, prefix="/admin", tags=["metrics"])  # /admin/analytics/*
     
     # AI routers
     app.include_router(nlu.router, prefix="/nlu", tags=["nlu"])

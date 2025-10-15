@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = Field(default='["http://localhost:5173"]')
     
-    # Database
-    database_url: str = Field(default="postgresql://bangla:bangla_dev_pass@localhost:5432/bangla_ai")
+    # Database (default to SQLite for simple VPS deploy)
+    database_url: str = Field(default="sqlite:///./bangla.db")
     
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/0")
