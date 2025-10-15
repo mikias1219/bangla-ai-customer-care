@@ -1,238 +1,84 @@
-name: Deploy to Production
+name: CI/CD - Build, Push, and Deploy
 
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/bangla-backend
   DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/bangla-dashboard
 
 jobs:
-  # Build and push Docker images
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
 
-    - name: Extract metadata for backend
-      id: meta-backend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.BACKEND_IMAGE }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build and push dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend/dashboard
+          file: ./frontend/dashboard/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.DASHBOARD_IMAGE }}:${{ github.sha }}
+            ${{ env.DASHBOARD_IMAGE }}:latest
 
-    - name: Build and push backend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-        labels: ${{ steps.meta-backend.outputs.labels }}
-
-    - name: Extract metadata for dashboard
-      id: meta-dashboard
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.DASHBOARD_IMAGE }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Build and push dashboard image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend/dashboard
-        push: true
-        tags: ${{ steps.meta-dashboard.outputs.tags }}
-        labels: ${{ steps.meta-dashboard.outputs.labels }}
-
-  # Deploy to production VPS
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Deploy to VPS
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        port: ${{ secrets.VPS_PORT || 22 }}
-        script: |
-          # Navigate to project directory
-          cd /opt/bdchatpro || mkdir -p /opt/bdchatpro && cd /opt/bdchatpro
+      - name: Copy deploy directory to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/*"
+          target: ${{ secrets.DEPLOY_PATH }}
 
-          # Backup current environment if exists
-          if [ -f .env ]; then
-            cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
-          fi
-
-          # Pull latest code
-          if [ -d .git ]; then
-            git pull origin main
-          else
-            git clone ${{ github.server_url }}/${{ github.repository }} .
-          fi
-
-          # Copy production environment if not exists
-          if [ ! -f .env ]; then
-            cp deploy/env.prod .env
-            echo "⚠️  WARNING: .env file created from template."
-          fi
-
-          # Helper to upsert key=value in .env safely
-          upsert_env() {
-            KEY="$1"; VAL="$2"
-            if grep -q "^${KEY}=" .env; then
-              sed -i "s|^${KEY}=.*|${KEY}=${VAL}|" .env
-            else
-              echo "${KEY}=${VAL}" >> .env
+      - name: Run remote deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH }}
+            if [ ! -f .env ]; then
+              echo "Missing .env in ${{ secrets.DEPLOY_PATH }}. Copy env.prod to .env and configure." >&2
+              exit 1
             fi
-          }
-
-          # Inject deployment secrets and config
-          upsert_env REGISTRY "ghcr.io"
-          upsert_env OWNER "${{ github.repository_owner }}"
-          upsert_env POSTGRES_PASSWORD "${{ secrets.POSTGRES_PASSWORD }}"
-          upsert_env BANG_SECRET_KEY "${{ secrets.BANG_SECRET_KEY }}"
-          upsert_env BANG_OPENAI_API_KEY "${{ secrets.BANG_OPENAI_API_KEY }}"
-          upsert_env BANG_OPENAI_MODEL "gpt-4o-mini"
-          upsert_env BANG_CORS_ORIGINS '["https://bdchatpro.com","https://www.bdchatpro.com"]'
-          # Optional monitoring/admin
-          if [ -n "${{ secrets.GRAFANA_ADMIN_PASSWORD }}" ]; then
-            upsert_env GRAFANA_ADMIN_PASSWORD "${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
-          fi
-
-          # Ensure Docker Compose plugin is available
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "Installing docker-compose-plugin..."
-            sudo apt-get update && sudo apt-get install -y docker-compose-plugin || true
-          fi
-
-          # Login to GHCR if credentials provided (required for private packages)
-          if [ -n "${{ secrets.GHCR_USERNAME }}" ] && [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
-          fi
-
-          # Pull images via compose (resolves all service image refs)
-          docker compose -f deploy/docker-compose.prod.yml pull || true
-
-          # Stop existing containers
-          docker compose -f deploy/docker-compose.prod.yml down || true
-
-          # Start services
-          docker compose -f deploy/docker-compose.prod.yml up -d
-
-          # Wait for services to be ready
-          sleep 30
-
-          # Run database migrations and setup
-          docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed"
-
-          # Add sample products for demo
-          docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed"
-
-          # Check service status
-          docker compose -f deploy/docker-compose.prod.yml ps
-
-          # Health check
-          curl -f https://bdchatpro.com/health || echo "⚠️  Health check failed - services may still be starting"
-
-          echo "✅ Deployment completed successfully!"
-          echo "🌐 Application available at: https://bdchatpro.com"
-          echo "📊 Dashboard: https://bdchatpro.com"
-          echo "📚 API Docs: https://bdchatpro.com/docs"
-
-  # Health check after deployment
-  health-check:
-    needs: deploy
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Health check
-      run: |
-        echo "Performing health checks..."
-
-        # Wait for services to fully start
-        sleep 60
-
-        # Check main application
-        if curl -f -s https://bdchatpro.com/health > /dev/null; then
-          echo "✅ Main application health check passed"
-        else
-          echo "❌ Main application health check failed"
-          exit 1
-        fi
-
-        # Check API docs
-        if curl -f -s https://bdchatpro.com/docs > /dev/null; then
-          echo "✅ API docs accessible"
-        else
-          echo "❌ API docs not accessible"
-        fi
-
-        echo "🎉 All health checks passed!"
-
-  # Rollback on failure
-  rollback:
-    needs: [deploy, health-check]
-    runs-on: ubuntu-latest
-    if: failure() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-
-    steps:
-    - name: Rollback deployment
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        port: ${{ secrets.VPS_PORT || 22 }}
-        script: |
-          cd /opt/bdchatpro
-
-          echo "🔄 Performing rollback..."
-
-          # Find latest backup
-          LATEST_BACKUP=$(ls -t .env.backup.* 2>/dev/null | head -1)
-
-          if [ -n "$LATEST_BACKUP" ]; then
-            cp "$LATEST_BACKUP" .env
-            echo "✅ Restored environment from backup: $LATEST_BACKUP"
-          fi
-
-          # Restart services
-          docker compose -f deploy/docker-compose.prod.yml down
-          docker compose -f deploy/docker-compose.prod.yml up -d
-
-          echo "🔄 Rollback completed"
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+            docker compose -f docker-compose.prod.yml pull || true
+            bash deploy.sh
