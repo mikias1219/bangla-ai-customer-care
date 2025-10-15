@@ -21,6 +21,7 @@ redis==5.0.1
 # HTTP clients
 httpx==0.25.2
 aiohttp==3.9.1
+requests==2.31.0
 
 # Auth
 python-jose[cryptography]==3.3.0
@@ -38,3 +39,4 @@ python-dateutil==2.8.2
 pytz==2023.3
 fuzzywuzzy==0.18.0
 python-levenshtein==0.27.1
+numpy==1.26.2
