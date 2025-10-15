@@ -133,15 +133,19 @@ jobs:
             upsert_env GRAFANA_ADMIN_PASSWORD "${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
           fi
 
-          # Update Docker images
-          docker pull ${{ env.BACKEND_IMAGE }}:latest
-          docker pull ${{ env.DASHBOARD_IMAGE }}:latest
+          # Ensure Docker Compose plugin is available
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "Installing docker-compose-plugin..."
+            sudo apt-get update && sudo apt-get install -y docker-compose-plugin || true
+          fi
 
-          # Tag images for local use (get actual registry from env)
-          BACKEND_REGISTRY="${{ env.BACKEND_IMAGE }}"
-          DASHBOARD_REGISTRY="${{ env.DASHBOARD_IMAGE }}"
-          docker tag "$BACKEND_REGISTRY:latest" bangla-backend:latest
-          docker tag "$DASHBOARD_REGISTRY:latest" bangla-dashboard:latest
+          # Login to GHCR if credentials provided (required for private packages)
+          if [ -n "${{ secrets.GHCR_USERNAME }}" ] && [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
+          fi
+
+          # Pull images via compose (resolves all service image refs)
+          docker compose -f deploy/docker-compose.prod.yml pull || true
 
           # Stop existing containers
           docker compose -f deploy/docker-compose.prod.yml down || true
