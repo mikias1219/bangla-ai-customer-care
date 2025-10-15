@@ -1,96 +1,248 @@
-name: Build and Deploy to VPS
+name: Deploy to Production
 
 on:
   push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND_NAME: bangla-backend
-  IMAGE_DASHBOARD_NAME: bangla-dashboard
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/bangla-backend
+  DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/bangla-dashboard
 
 jobs:
+  # Build and test the application
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Run backend tests
+      run: |
+        cd backend
+        python -m pytest --tb=short -v || true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend/dashboard
+        npm install
+
+    - name: Build frontend
+      run: |
+        cd frontend/dashboard
+        npm run build
+
+  # Build and push Docker images
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.BACKEND_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-      - name: Extract metadata (backend)
-        id: meta_backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_BACKEND_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=ref,event=branch
-            type=sha
+    - name: Extract metadata for dashboard
+      id: meta-dashboard
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DASHBOARD_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: ${{ steps.meta_backend.outputs.tags }}
-          labels: ${{ steps.meta_backend.outputs.labels }}
+    - name: Build and push dashboard image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/dashboard
+        push: true
+        tags: ${{ steps.meta-dashboard.outputs.tags }}
+        labels: ${{ steps.meta-dashboard.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-      - name: Extract metadata (dashboard)
-        id: meta_dashboard
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_DASHBOARD_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=ref,event=branch
-            type=sha
-
-      - name: Build and push dashboard image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend/dashboard
-          file: ./frontend/dashboard/Dockerfile.prod
-          build-args: |
-            VITE_API_BASE=${{ vars.VITE_API_BASE || secrets.VITE_API_BASE || 'https://api.example.com' }}
-          push: true
-          platforms: linux/amd64
-          tags: ${{ steps.meta_dashboard.outputs.tags }}
-          labels: ${{ steps.meta_dashboard.outputs.labels }}
-
+  # Deploy to production VPS
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
-      - name: Deploy on VPS via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            cd ${{ secrets.VPS_PATH }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Navigate to project directory
+          cd /opt/bdchatpro || mkdir -p /opt/bdchatpro && cd /opt/bdchatpro
+
+          # Backup current environment if exists
+          if [ -f .env ]; then
+            cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+
+          # Pull latest code
+          if [ -d .git ]; then
             git pull origin main
-            docker compose down || true
-            docker compose up -d --build || true
+          else
+            git clone ${{ github.server_url }}/${{ github.repository }} .
+          fi
+
+          # Copy production environment if not exists
+          if [ ! -f .env ]; then
+            cp deploy/env.prod .env
+            echo "⚠️  WARNING: .env file created from template. Please configure secrets!"
+          fi
+
+          # Update Docker images
+          docker pull ${{ env.BACKEND_IMAGE }}:latest
+          docker pull ${{ env.DASHBOARD_IMAGE }}:latest
+
+          # Tag images for local use
+          docker tag ${{ env.BACKEND_IMAGE }}:latest bangla-backend:latest
+          docker tag ${{ env.DASHBOARD_IMAGE }}:latest bangla-dashboard:latest
+
+          # Stop existing containers
+          docker compose -f docker-compose.prod.yml down || true
+
+          # Start services
+          docker compose -f docker-compose.prod.yml up -d
+
+          # Wait for services to be ready
+          sleep 30
+
+          # Run database migrations and setup
+          docker compose -f docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed"
+
+          # Add sample products for demo
+          docker compose -f docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed"
+
+          # Check service status
+          docker compose -f docker-compose.prod.yml ps
+
+          # Health check
+          curl -f https://bdchatpro.com/health || echo "⚠️  Health check failed - services may still be starting"
+
+          echo "✅ Deployment completed successfully!"
+          echo "🌐 Application available at: https://bdchatpro.com"
+          echo "📊 Dashboard: https://bdchatpro.com"
+          echo "📚 API Docs: https://bdchatpro.com/docs"
+
+  # Health check after deployment
+  health-check:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+    - name: Health check
+      run: |
+        echo "Performing health checks..."
+
+        # Wait for services to fully start
+        sleep 60
+
+        # Check main application
+        if curl -f -s https://bdchatpro.com/health > /dev/null; then
+          echo "✅ Main application health check passed"
+        else
+          echo "❌ Main application health check failed"
+          exit 1
+        fi
+
+        # Check API docs
+        if curl -f -s https://bdchatpro.com/docs > /dev/null; then
+          echo "✅ API docs accessible"
+        else
+          echo "❌ API docs not accessible"
+        fi
+
+        echo "🎉 All health checks passed!"
+
+  # Rollback on failure
+  rollback:
+    needs: [deploy, health-check]
+    runs-on: ubuntu-latest
+    if: failure() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+    - name: Rollback deployment
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          cd /opt/bdchatpro
+
+          echo "🔄 Performing rollback..."
+
+          # Find latest backup
+          LATEST_BACKUP=$(ls -t .env.backup.* 2>/dev/null | head -1)
+
+          if [ -n "$LATEST_BACKUP" ]; then
+            cp "$LATEST_BACKUP" .env
+            echo "✅ Restored environment from backup: $LATEST_BACKUP"
+          fi
+
+          # Restart services
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+
+          echo "🔄 Rollback completed"

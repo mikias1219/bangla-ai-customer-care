@@ -2,7 +2,7 @@
 # Place in /etc/caddy/Caddyfile and run 'sudo systemctl restart caddy'
 
 # Main domain - dashboard with API proxy
-yourdomain.com {
+bdchatpro.com {
     # Enable automatic HTTPS
     tls {
         protocols tls1.2 tls1.3
@@ -91,7 +91,7 @@ yourdomain.com {
 }
 
 # Optional: separate API subdomain
-api.yourdomain.com {
+api.bdchatpro.com {
     tls {
         protocols tls1.2 tls1.3
     }

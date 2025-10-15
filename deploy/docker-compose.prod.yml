@@ -24,7 +24,7 @@ services:
       BANG_DATABASE_URL: postgresql://bangla:${POSTGRES_PASSWORD}@postgres:5432/bangla_ai
       BANG_REDIS_URL: redis://redis:6379/0
       BANG_SECRET_KEY: ${BANG_SECRET_KEY}
-      BANG_CORS_ORIGINS: ${BANG_CORS_ORIGINS:-["https://your-domain","http://localhost:5173"]}
+      BANG_CORS_ORIGINS: ${BANG_CORS_ORIGINS:-["https://bdchatpro.com","https://www.bdchatpro.com","http://localhost:5173"]}
       BANG_NLU_MODEL_NAME: ${BANG_NLU_MODEL_NAME:-sagorsarker/bangla-bert-base}
       BANG_WHISPER_MODEL_SIZE: ${BANG_WHISPER_MODEL_SIZE:-base}
       BANG_TTS_PROVIDER: ${BANG_TTS_PROVIDER:-google}
