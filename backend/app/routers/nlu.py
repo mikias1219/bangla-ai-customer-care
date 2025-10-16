@@ -60,7 +60,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     """
     try:
         # Step 1: Understand the user's intent
-        nlu_result = await nlu_service.resolve(req.text, req.context or {})
+        nlu_result = await nlu_service.resolve(req.text, {})
         intent = nlu_result.get("intent", "fallback")
         entities = nlu_result.get("entities", {})
         confidence = nlu_result.get("confidence", 0.0)
