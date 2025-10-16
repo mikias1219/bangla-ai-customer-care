@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -195,7 +195,7 @@ def get_customer_stats(db: Session = Depends(get_db)):
     # Channel distribution
     channel_stats = db.query(
         Customer.channel,
-        db.func.count(Customer.id).label('count')
+        func.count(Customer.id).label('count')
     ).group_by(Customer.channel).all()
 
     channel_distribution = {channel: count for channel, count in channel_stats}
