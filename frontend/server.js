@@ -49,12 +49,12 @@ app.use('/api', (req, res) => {
   req.pipe(proxyReq);
 });
 
-// Serve static files from dist directory
-app.use(express.static(path.join(__dirname, 'dist')));
+// Serve static files from dashboard/dist directory
+app.use(express.static(path.join(__dirname, 'dashboard', 'dist')));
 
 // SPA fallback - serve index.html for all non-API routes
 app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  const indexPath = path.join(__dirname, 'dashboard', 'dist', 'index.html');
   if (require('fs').existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
