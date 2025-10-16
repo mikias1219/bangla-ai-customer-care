@@ -88,22 +88,31 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y python3-venv python3-pip nginx rsync certbot python3-certbot-nginx
 
-            # Clean up temp directory first
-            echo "🧹 Cleaning up temporary files..."
-            rm -rf /tmp/bangla_upload_old
-            if [ -d /tmp/bangla_upload ]; then
-              mv /tmp/bangla_upload /tmp/bangla_upload_old || true
+            # Verify uploaded files exist
+            echo "🔍 Verifying uploaded files..."
+            if [ ! -d /tmp/bangla_upload/backend ]; then
+              echo "❌ Error: Backend files not found in /tmp/bangla_upload/backend"
+              exit 1
             fi
+            if [ ! -d /tmp/bangla_upload/deploy ]; then
+              echo "❌ Error: Deploy files not found in /tmp/bangla_upload/deploy"
+              exit 1
+            fi
+            if [ ! -d /tmp/bangla_upload/dist ]; then
+              echo "❌ Error: Frontend dist not found in /tmp/bangla_upload/dist"
+              exit 1
+            fi
+            echo "✅ All files verified"
 
-            # Move uploaded files
+            # Move uploaded files to final destination
             echo "📂 Deploying backend files..."
             sudo mkdir -p "$VPS_PATH"/backend "$VPS_PATH"/deploy
-            sudo rsync -a --delete /tmp/bangla_upload/backend/ "$VPS_PATH"/backend/
-            sudo rsync -a --delete /tmp/bangla_upload/deploy/ "$VPS_PATH"/deploy/
+            sudo rsync -a /tmp/bangla_upload/backend/ "$VPS_PATH"/backend/
+            sudo rsync -a /tmp/bangla_upload/deploy/ "$VPS_PATH"/deploy/
             
             echo "📂 Deploying frontend files..."
             sudo mkdir -p "$WEBROOT"
-            sudo rsync -az --delete /tmp/bangla_upload/dist/ "$WEBROOT"/
+            sudo rsync -az /tmp/bangla_upload/dist/ "$WEBROOT"/
 
             # Fix ownership
             sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} "$VPS_PATH"
