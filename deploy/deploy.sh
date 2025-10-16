@@ -34,7 +34,7 @@ echo "🔧 Setting up backend..."
 python3 -m venv venv --clear
 source venv/bin/activate
 pip install --upgrade pip
-pip install fastapi uvicorn sqlalchemy alembic redis httpx aiohttp requests python-jose passlib python-multipart prometheus-client openai python-dateutil pytz fuzzywuzzy python-levenshtein numpy
+pip install -r backend/requirements.txt
 
 echo ""
 echo "🎨 Setting up frontend..."
@@ -42,13 +42,20 @@ echo "🎨 Setting up frontend..."
 cd frontend
 npm install
 
-# Build the React app if dashboard exists
+# Build the client dashboard
 if [ -d "dashboard" ]; then
   cd dashboard
   npm install
   npm run build
   cd ..
-  cp -r dashboard/dist/* . 2>/dev/null || true
+fi
+
+# Build the admin dashboard
+if [ -d "admin-dashboard" ]; then
+  cd admin-dashboard
+  npm install
+  npm run build
+  cd ..
 fi
 
 cd ..

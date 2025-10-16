@@ -3,7 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.tenant import TenantMiddleware
 from app.routers import health, nlu, dm, resolver, admin, intents, entities, conversations, templates, auth, products, orders, customers
+from app.routers.admin_clients import router as admin_clients_router
+from app.routers.client_auth import router as client_auth_router
+from app.routers.payments import router as payments_router
+from app.routers.public_registration import router as public_registration_router
 from app.channels import whatsapp, webchat
 from app.channels import meta as meta_channel
 from app.channels import voice_twilio, voice_voip
@@ -29,6 +34,9 @@ def create_app() -> FastAPI:
         description="Full-scale Bangla AI customer care platform with NLU, ASR, TTS, and multi-channel support"
     )
 
+    # Add tenant middleware first
+    app.add_middleware(TenantMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -40,6 +48,9 @@ def create_app() -> FastAPI:
     # Core routers
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    app.include_router(client_auth_router, tags=["client-auth"])
+    app.include_router(payments_router, prefix="/payments", tags=["payments"])
+    app.include_router(public_registration_router, prefix="/public", tags=["public"])
     # Metrics (expose both plain and /admin/* for dashboard compatibility)
     app.include_router(metrics_router.router, tags=["metrics"])  # /metrics, /analytics/*
     app.include_router(metrics_router.router, prefix="/admin", tags=["metrics"])  # /admin/analytics/*
@@ -51,6 +62,7 @@ def create_app() -> FastAPI:
     
     # Admin routers
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
+    app.include_router(admin_clients_router, prefix="/admin", tags=["admin-clients"])
     app.include_router(intents.router, prefix="/admin/intents", tags=["intents"])
     app.include_router(entities.router, prefix="/admin/entities", tags=["entities"])
     app.include_router(conversations.router, prefix="/admin/conversations", tags=["conversations"])
