@@ -56,10 +56,10 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router, prefix="/admin/conversations", tags=["conversations"])
     app.include_router(templates.router, prefix="/admin/templates", tags=["templates"])
 
-    # E-commerce routers
-    app.include_router(products.router, prefix="/api", tags=["products"])
-    app.include_router(orders.router, prefix="/api", tags=["orders"])
-    app.include_router(customers.router, prefix="/api", tags=["customers"])
+    # E-commerce routers (routers already have /products, /orders, /customers prefixes)
+    app.include_router(products.router, tags=["products"])
+    app.include_router(orders.router, tags=["orders"])
+    app.include_router(customers.router, tags=["customers"])
     
     # Channel adapters
     app.include_router(whatsapp.router, prefix="/channels/whatsapp", tags=["channels"])
