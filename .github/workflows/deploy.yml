@@ -294,6 +294,17 @@ jobs:
             set -e
             echo "🔄 Setting up systemd services..."
 
+            # Determine the correct Node.js path
+            if command -v node &> /dev/null; then
+              NODE_BIN=$(which node)
+            elif [ -x "/usr/bin/node" ]; then
+              NODE_BIN="/usr/bin/node"
+            else
+              echo "❌ Cannot determine Node.js binary path"
+              exit 1
+            fi
+            echo "📍 Using Node.js binary: $NODE_BIN"
+
             sudo tee /etc/systemd/system/bangla-frontend.service > /dev/null << FRONTEND_SERVICE_EOF
             [Unit]
             Description=Bangla Frontend (Node.js)
@@ -301,12 +312,14 @@ jobs:
 
             [Service]
             Type=simple
-            User=\$USER
+            User=root
             WorkingDirectory=/opt/bangla-ai-customer-care/frontend
-            ExecStart=/usr/bin/node server.js
+            ExecStart=$NODE_BIN server.js
             Restart=always
             RestartSec=5
             Environment=PORT=$FRONTEND_PORT
+            StandardOutput=journal
+            StandardError=journal
 
             [Install]
             WantedBy=multi-user.target
@@ -319,12 +332,14 @@ jobs:
 
             [Service]
             Type=simple
-            User=\$USER
+            User=root
             WorkingDirectory=/opt/bangla-ai-customer-care/backend
             Environment="PATH=/opt/bangla-ai-customer-care/backend/venv/bin"
             ExecStart=/opt/bangla-ai-customer-care/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT
             Restart=always
             RestartSec=5
+            StandardOutput=journal
+            StandardError=journal
 
             [Install]
             WantedBy=multi-user.target
@@ -341,6 +356,65 @@ jobs:
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "▶️ Starting services..."
+
+            # Validate service files before starting
+            echo "🔍 Validating systemd service files..."
+            if [ -f "/etc/systemd/system/bangla-frontend.service" ]; then
+              echo "✅ Frontend service file exists"
+              sudo systemd-analyze verify bangla-frontend.service || echo "⚠️ Frontend service file has warnings"
+            else
+              echo "❌ Frontend service file missing"
+              exit 1
+            fi
+
+            if [ -f "/etc/systemd/system/bangla-backend.service" ]; then
+              echo "✅ Backend service file exists"
+              sudo systemd-analyze verify bangla-backend.service || echo "⚠️ Backend service file has warnings"
+            else
+              echo "❌ Backend service file missing"
+              exit 1
+            fi
+
+            # Check if server.js exists and make it executable
+            if [ -f "/opt/bangla-ai-customer-care/frontend/server.js" ]; then
+              echo "✅ server.js file exists"
+              chmod +x /opt/bangla-ai-customer-care/frontend/server.js
+              echo "✅ Made server.js executable"
+
+              # Check if node is available
+              if command -v node &> /dev/null; then
+                echo "✅ Node.js is available: $(node --version)"
+                NODE_PATH=$(which node)
+                echo "📍 Node.js path: $NODE_PATH"
+              else
+                echo "❌ Node.js not found in PATH"
+                which node || echo "Node.js not found"
+                # Try common Node.js paths
+                if [ -x "/usr/bin/node" ]; then
+                  NODE_PATH="/usr/bin/node"
+                  echo "📍 Found Node.js at: $NODE_PATH"
+                elif [ -x "/usr/local/bin/node" ]; then
+                  NODE_PATH="/usr/local/bin/node"
+                  echo "📍 Found Node.js at: $NODE_PATH"
+                else
+                  echo "❌ Node.js not found in common locations"
+                  exit 1
+                fi
+              fi
+            else
+              echo "❌ server.js file missing"
+              exit 1
+            fi
+
+            # Check if backend app exists
+            if [ -f "/opt/bangla-ai-customer-care/backend/app/main.py" ]; then
+              echo "✅ Backend main.py exists"
+            else
+              echo "❌ Backend main.py missing"
+              exit 1
+            fi
+
+            echo "🚀 Starting services..."
             sudo systemctl start bangla-frontend
             sudo systemctl start bangla-backend
 
