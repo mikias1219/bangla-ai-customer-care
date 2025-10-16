@@ -21,7 +21,8 @@ import {
   useTheme,
   useMediaQuery,
   Drawer,
-  alpha
+  alpha,
+  CircularProgress
 } from '@mui/material'
 import {
   Send as SendIcon,
@@ -76,13 +77,13 @@ export function Inbox() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const isTablet = useMediaQuery(theme.breakpoints.down('lg'))
 
-  // Sample conversations
+  // Sample conversations (in production, fetch from backend)
   useEffect(() => {
     const sampleConversations: Conversation[] = [
       {
         id: '1',
         customerName: 'John Doe',
-        lastMessage: 'আমার অর্ডার কোথায়?',
+        lastMessage: 'আমার অর্ডার কোথায়?',
         timestamp: new Date(Date.now() - 5 * 60 * 1000),
         unreadCount: 2,
         channel: 'whatsapp',
@@ -121,23 +122,9 @@ export function Inbox() {
       },
       {
         id: '2',
-        text: 'নিশ্চয়ই! আমি আপনাকে সাহায্য করতে পারি। আপনার কী প্রশ্ন আছে?',
+        text: 'নিশ্চয়ই! আমি আপনাকে সাহায্য করতে পারি। আপনার কী প্রশ্ন আছে?',
         sender: 'bot',
         timestamp: new Date(Date.now() - 9 * 60 * 1000),
-        channel: 'whatsapp'
-      },
-      {
-        id: '3',
-        text: 'আমার অর্ডার #123 এর স্ট্যাটাস কী?',
-        sender: 'user',
-        timestamp: new Date(Date.now() - 8 * 60 * 1000),
-        channel: 'whatsapp'
-      },
-      {
-        id: '4',
-        text: 'আপনার অর্ডার #123 বর্তমানে "প্রসেসিং" স্ট্যাটাসে আছে। এটি আজ রাতের মধ্যে শিপ করা হবে। আপনার কোনো অন্য প্রশ্ন আছে?',
-        sender: 'bot',
-        timestamp: new Date(Date.now() - 7 * 60 * 1000),
         channel: 'whatsapp'
       }
     ]
@@ -155,9 +142,10 @@ export function Inbox() {
   async function sendMessage() {
     if (!input.trim()) return
 
+    const userText = input
     const newMessage: Message = {
       id: Date.now().toString(),
-      text: input,
+      text: userText,
       sender: 'user',
       timestamp: new Date(),
       channel: activeChannel
@@ -167,52 +155,60 @@ export function Inbox() {
     setInput('')
     setIsTyping(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(input)
+    try {
+      // Call backend NLU API for real GPT-powered response
+      const response = await fetch('/api/v0/nlu/resolve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: userText,
+          channel: activeChannel,
+          user_id: activeConversation || 'user_1'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Backend API error')
+      }
+
+      const data = await response.json()
+      
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: aiResponse,
+        text: data.response || data.message || 'আমি আপনাকে সাহায্য করতে পারছি না। দয়া করে আবার চেষ্টা করুন।',
         sender: 'bot',
         timestamp: new Date(),
         channel: activeChannel
       }
+      
       setMessages(prev => [...prev, botMessage])
+    } catch (error) {
+      console.error('Error sending message:', error)
+      
+      // Fallback response if backend fails
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: 'দুঃখিত, সার্ভারে কানেক্ট করতে সমস্যা হচ্ছে। অনুগ্রহ করে একটু পরে আবার চেষ্টা করুন।',
+        sender: 'bot',
+        timestamp: new Date(),
+        channel: activeChannel
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsTyping(false)
-    }, 1000 + Math.random() * 2000)
+    }
   }
-
-  function generateAIResponse(userMessage: string): string {
-    const lowerMessage = userMessage.toLowerCase()
-
-    if (lowerMessage.includes('অর্ডার') || lowerMessage.includes('order')) {
-      return 'আপনার অর্ডার স্ট্যাটাস দেখার জন্য আপনার অর্ডার আইডি দিন। উদাহরণ: "অর্ডার #123"'
-    }
-
-    if (lowerMessage.includes('দাম') || lowerMessage.includes('price') || lowerMessage.includes('কত')) {
-      return 'আমাদের প্রোডাক্টের দাম জানতে চান? কোন প্রোডাক্টের দাম জানতে চান বলুন।'
-    }
-
-    if (lowerMessage.includes('ডেলিভারি') || lowerMessage.includes('delivery')) {
-      return 'আমাদের ডেলিভারি ২-৩ কার্যদিবসের মধ্যে হয়। আপনার এলাকায় কতদিন লাগবে জানতে চান?'
-    }
-
-    if (lowerMessage.includes('রিটার্ন') || lowerMessage.includes('return')) {
-      return 'প্রোডাক্ট রিটার্ন করতে চান? রিসিভ করে ৭ দিনের মধ্যে রিটার্ন করা যায়। বিস্তারিত জানতে বলুন।'
-    }
-
-    return 'আপনার প্রশ্নটি ভালো করে বুঝতে পারলাম না। অনুগ্রহ করে আরেকটু বিস্তারিত করে বলুন, যেমন: "অর্ডার স্ট্যাটাস", "প্রোডাক্ট দাম", বা "ডেলিভারি ইনফো"।'
-  }
-
 
   const getChannelColor = (channel: string) => {
     switch (channel) {
       case 'whatsapp':
-        return theme.palette.whatsapp.main
+        return theme.palette.whatsapp?.main || '#25d366'
       case 'messenger':
-        return theme.palette.facebook.main
+        return theme.palette.facebook?.main || '#1877f2'
       case 'instagram':
-        return theme.palette.instagram.main
+        return theme.palette.instagram?.main || '#e4405f'
       default:
         return theme.palette.grey[500]
     }
@@ -335,7 +331,7 @@ export function Inbox() {
   )
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box sx={{ height: { xs: 'calc(100vh - 64px)', md: '100%' }, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header */}
       <Paper
         elevation={0}
@@ -364,7 +360,7 @@ export function Inbox() {
               </Typography>
               {!isMobile && (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Manage customer conversations
+                  AI-powered multilingual support
                 </Typography>
               )}
             </Box>
@@ -373,9 +369,9 @@ export function Inbox() {
           {/* Channel tabs */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {[
-              { id: 'messenger' as const, label: isMobile ? 'FB' : 'Messenger', color: theme.palette.facebook.main, emoji: '💙' },
-              { id: 'whatsapp' as const, label: isMobile ? 'WA' : 'WhatsApp', color: theme.palette.whatsapp.main, emoji: '💚' },
-              { id: 'instagram' as const, label: isMobile ? 'IG' : 'Instagram', color: theme.palette.instagram.main, emoji: '💜' }
+              { id: 'messenger' as const, label: isMobile ? 'FB' : 'Messenger', color: getChannelColor('messenger'), emoji: '💙' },
+              { id: 'whatsapp' as const, label: isMobile ? 'WA' : 'WhatsApp', color: getChannelColor('whatsapp'), emoji: '💚' },
+              { id: 'instagram' as const, label: isMobile ? 'IG' : 'Instagram', color: getChannelColor('instagram'), emoji: '💜' }
             ].map(({ id, label, color, emoji }) => (
               <Button
                 key={id}
@@ -390,6 +386,7 @@ export function Inbox() {
                   minWidth: isMobile ? 50 : 120,
                   ...(activeChannel === id && {
                     backgroundColor: color,
+                    borderColor: color,
                     '&:hover': { backgroundColor: alpha(color, 0.8) }
                   })
                 }}
@@ -450,7 +447,7 @@ export function Inbox() {
                 elevation={0}
                 sx={{
                   borderBottom: `1px solid ${theme.palette.divider}`,
-                  px: 3,
+                  px: { xs: 2, md: 3 },
                   py: 2,
                   borderRadius: 0,
                   display: 'flex',
@@ -478,7 +475,7 @@ export function Inbox() {
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          bgcolor: activeChannel === 'whatsapp' ? 'whatsapp.main' : 'primary.main',
+                          bgcolor: getChannelColor(activeChannel),
                         }}
                       />
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -510,14 +507,14 @@ export function Inbox() {
 
               {/* Messages */}
               <Box
-                className="chat-messages"
                 sx={{
                   flex: 1,
                   overflowY: 'auto',
-                  p: 3,
+                  p: { xs: 2, md: 3 },
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 2,
+                  bgcolor: 'grey.50'
                 }}
               >
                 {messages.map((message) => (
@@ -529,30 +526,35 @@ export function Inbox() {
                     }}
                   >
                     <Box
-                      className="chat-message"
                       sx={{
+                        maxWidth: { xs: '85%', sm: '70%', md: '60%' },
+                        px: 2,
+                        py: 1.5,
+                        borderRadius: 3,
                         ...(message.sender === 'user'
                           ? {
                               bgcolor: 'primary.main',
                               color: 'primary.contrastText',
-                              ml: 'auto',
                               borderBottomRightRadius: 1,
                             }
                           : {
-                              bgcolor: 'grey.100',
+                              bgcolor: 'background.paper',
                               color: 'text.primary',
                               borderBottomLeftRadius: 1,
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }
                         ),
                       }}
                     >
-                      <Typography variant="body2">{message.text}</Typography>
+                      <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>
+                        {message.text}
+                      </Typography>
                       <Typography
                         variant="caption"
                         sx={{
                           mt: 0.5,
                           display: 'block',
-                          color: message.sender === 'user' ? 'primary.light' : 'text.secondary',
+                          opacity: 0.7,
                         }}
                       >
                         {formatTime(message.timestamp)}
@@ -565,18 +567,19 @@ export function Inbox() {
                   <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                     <Box
                       sx={{
-                        bgcolor: 'grey.100',
+                        bgcolor: 'background.paper',
                         px: 2,
-                        py: 1,
+                        py: 1.5,
                         borderRadius: 3,
                         borderBottomLeftRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                       }}
                     >
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Box className="typing-indicator" />
-                        <Box className="typing-indicator" sx={{ animationDelay: '0.1s' }} />
-                        <Box className="typing-indicator" sx={{ animationDelay: '0.2s' }} />
-                      </Box>
+                      <CircularProgress size={16} thickness={4} />
+                      <Typography variant="body2" sx={{ ml: 1 }}>Typing...</Typography>
                     </Box>
                   </Box>
                 )}
@@ -585,44 +588,51 @@ export function Inbox() {
 
               {/* Message input */}
               <Box
-                className="chat-input-area"
                 sx={{
                   borderTop: `1px solid ${theme.palette.divider}`,
-                  p: 2,
+                  p: { xs: 1.5, md: 2 },
                   display: 'flex',
-                  gap: 2,
-                  alignItems: 'center',
+                  gap: { xs: 1, md: 2 },
+                  alignItems: 'flex-end',
+                  bgcolor: 'background.paper'
                 }}
               >
                 <TextField
                   fullWidth
                   value={input}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-                  onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendMessage()
+                    }
+                  }}
                   placeholder="Type a message..."
                   variant="outlined"
                   size="small"
                   multiline
-                  maxRows={3}
+                  maxRows={4}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 3,
+                      bgcolor: 'grey.50'
                     },
                   }}
                 />
                 <Button
                   onClick={sendMessage}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || isTyping}
                   variant="contained"
                   endIcon={<SendIcon />}
                   sx={{
                     borderRadius: 3,
-                    px: 3,
+                    px: { xs: 2, md: 3 },
                     textTransform: 'none',
                     fontWeight: 500,
+                    minWidth: { xs: 80, md: 100 }
                   }}
                 >
-                  Send
+                  {!isMobile && 'Send'}
                 </Button>
               </Box>
             </>
@@ -650,15 +660,15 @@ export function Inbox() {
               <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 500 }}>
                 Select a conversation
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                Choose a conversation from the sidebar to start chatting
+              <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', maxWidth: 300 }}>
+                Choose a conversation from the sidebar to start chatting with our AI-powered assistant
               </Typography>
             </Box>
           )}
         </Box>
 
         {/* Customer info sidebar - Desktop */}
-        {!isMobile && !isTablet && (
+        {!isMobile && !isTablet && activeConversation && (
           <Paper
             elevation={0}
             sx={{
@@ -667,10 +677,10 @@ export function Inbox() {
               borderRadius: 0,
               display: 'flex',
               flexDirection: 'column',
+              overflow: 'auto'
             }}
           >
-            {activeConversation ? (
-            <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
+            <Box sx={{ p: 3 }}>
               <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Avatar
                   sx={{
@@ -705,14 +715,8 @@ export function Inbox() {
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>+880 1234-567890</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Email:</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>john@example.com</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>Channel:</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500, textTransform: 'capitalize' }}>
-                          {activeChannel}
-                        </Typography>
+                        <Chip label={activeChannel} size="small" color="primary" />
                       </Box>
                     </Box>
                   </CardContent>
@@ -721,54 +725,19 @@ export function Inbox() {
                 <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
-                      Recent Orders
+                      AI Assistant
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="body2">Order #123</Typography>
-                      <Chip
-                        label="Processing"
-                        size="small"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.7rem',
-                          bgcolor: 'warning.light',
-                          color: 'warning.dark',
-                        }}
-                      />
-                    </Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      iPhone 15 Pro • $999 • 2 days ago
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                  <CardContent sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
-                      Conversation Summary
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                      Customer is inquiring about order status and delivery timeline.
-                      Previous interaction was about product pricing.
+                    <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
+                      Using GPT-4o-mini for multilingual support in Bangla, English, Hindi, Arabic, and Urdu.
                     </Typography>
                   </CardContent>
                 </Card>
               </Box>
             </Box>
-          ) : (
-            <Box sx={{ p: 3, textAlign: 'center', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Box>
-                <InfoIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Select a conversation to view customer details
-                </Typography>
-              </Box>
-            </Box>
-          )}
           </Paper>
         )}
 
-        {/* Customer info sidebar - Mobile/Tablet Drawer */}
+        {/* Customer info drawer - Mobile/Tablet */}
         {(isMobile || isTablet) && (
           <Drawer
             anchor="right"
@@ -781,101 +750,68 @@ export function Inbox() {
               },
             }}
           >
-            {activeConversation && (
-              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Customer Info</Typography>
-                  <IconButton onClick={() => setInfoOpen(false)}>
-                    <ArrowBackIcon />
-                  </IconButton>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Customer Info</Typography>
+                <IconButton onClick={() => setInfoOpen(false)}>
+                  <ArrowBackIcon />
+                </IconButton>
+              </Box>
+              <Box sx={{ p: 3, flex: 1, overflow: 'auto' }}>
+                <Box sx={{ textAlign: 'center', mb: 4 }}>
+                  <Avatar
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      bgcolor: getChannelColor(activeChannel),
+                      mx: 'auto',
+                      mb: 2,
+                      fontSize: 24,
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    J
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                    John Doe
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Customer ID: #12345
+                  </Typography>
                 </Box>
-                <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
-                  <Box sx={{ textAlign: 'center', mb: 4 }}>
-                    <Avatar
-                      sx={{
-                        width: 64,
-                        height: 64,
-                        bgcolor: getChannelColor(activeChannel),
-                        mx: 'auto',
-                        mb: 2,
-                        fontSize: 24,
-                        fontWeight: 'bold',
-                      }}
-                    >
-                      J
-                    </Avatar>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
-                      John Doe
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Customer ID: #12345
-                    </Typography>
-                  </Box>
 
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                      <CardContent sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
-                          Contact Info
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Phone:</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>+880 1234-567890</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Email:</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>john@example.com</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Channel:</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 500, textTransform: 'capitalize' }}>
-                              {activeChannel}
-                            </Typography>
-                          </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                    <CardContent sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
+                        Contact Info
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Phone:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>+880 1234-567890</Typography>
                         </Box>
-                      </CardContent>
-                    </Card>
-
-                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                      <CardContent sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
-                          Recent Orders
-                        </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="body2">Order #123</Typography>
-                          <Chip
-                            label="Processing"
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: '0.7rem',
-                              bgcolor: 'warning.light',
-                              color: 'warning.dark',
-                            }}
-                          />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Channel:</Typography>
+                          <Chip label={activeChannel} size="small" color="primary" />
                         </Box>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          iPhone 15 Pro • $999 • 2 days ago
-                        </Typography>
-                      </CardContent>
-                    </Card>
+                      </Box>
+                    </CardContent>
+                  </Card>
 
-                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                      <CardContent sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
-                          Conversation Summary
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                          Customer is inquiring about order status and delivery timeline.
-                          Previous interaction was about product pricing.
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Box>
+                  <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                    <CardContent sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
+                        AI Assistant
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
+                        Using GPT-4o-mini for multilingual support in Bangla, English, Hindi, Arabic, and Urdu.
+                      </Typography>
+                    </CardContent>
+                  </Card>
                 </Box>
               </Box>
-            )}
+            </Box>
           </Drawer>
         )}
       </Box>
