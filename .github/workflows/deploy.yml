@@ -1,249 +1,255 @@
-name: Deploy (VPS, no Docker)
+name: Deploy Bangla AI Customer Care
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 env:
   DOMAIN: bdchatpro.com
-  WEBROOT: /var/www/bangla
+  FRONTEND_PORT: 3002
+  BACKEND_PORT: 8000
+  SSH_HOST: ${{ secrets.VPS_HOST }}
+  SSH_USER: ${{ secrets.VPS_USER }}
+  SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  SSL_EMAIL: ${{ secrets.SSL_EMAIL }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "$SSH_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-      - name: Build frontend dashboard
-        run: |
-          cd frontend/dashboard
-          npm ci || npm i
-          VITE_API_BASE=https://${{ env.DOMAIN }} npm run build
+    - name: Deploy to VPS
+      run: |
+        ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+        set -e
 
-      - name: Setup SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # Write the SSH key to file
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # Add VPS to known_hosts
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          # Test SSH connection
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"
-          cat ~/.ssh/known_hosts
+        echo "🚀 Starting deployment..."
 
-      - name: Prepare remote directories
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "rm -rf /tmp/bangla_upload && mkdir -p /tmp/bangla_upload/backend /tmp/bangla_upload/deploy /tmp/bangla_upload/dist '${{ secrets.VPS_PATH }}'"
+        # Update system
+        sudo apt update && sudo apt upgrade -y
 
-      - name: Upload backend files
-        run: |
-          echo "📦 Uploading backend..."
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
-          echo "✅ Backend uploaded"
+        # Install required packages
+        sudo apt install -y nginx python3 python3-pip python3-venv nodejs npm snapd curl
 
-      - name: Upload deploy scripts
-        run: |
-          echo "📦 Uploading deploy scripts..."
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
-          echo "✅ Deploy scripts uploaded"
+        # Install certbot
+        sudo snap install core
+        sudo snap refresh core
+        sudo snap install --classic certbot
+        sudo ln -sf /snap/bin/certbot /usr/bin/certbot
 
-      - name: Upload frontend dist
-        run: |
-          echo "📦 Uploading frontend..."
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
-          echo "✅ Frontend uploaded"
-      
-      - name: Verify uploads
-        run: |
-          echo "🔍 Verifying uploaded files..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "ls -la /tmp/bangla_upload/ && ls -la /tmp/bangla_upload/backend/ && ls -la /tmp/bangla_upload/deploy/ && ls -la /tmp/bangla_upload/dist/"
+        # Create project directory
+        sudo mkdir -p /opt/bangla-ai-customer-care
+        sudo chown $USER:$USER /opt/bangla-ai-customer-care
 
-      - name: Remote deploy & restart
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API }}
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s "$OPENAI_API_KEY" <<'ENDSSH'
-            set -euo pipefail
+        # Stop existing services
+        sudo systemctl stop bangla-frontend 2>/dev/null || true
+        sudo systemctl stop bangla-backend 2>/dev/null || true
 
-            DOMAIN="bdchatpro.com"
-            WEBROOT="/var/www/bangla"
-            VPS_PATH="${{ secrets.VPS_PATH }}"
-            OPENAI_API_KEY="$1"
+        echo "📦 Setting up backend..."
+        cd /opt/bangla-ai-customer-care
 
-            echo "🚀 Starting deployment to bdchatpro.com..."
-            
-            # Install required packages
-            echo "📦 Installing required packages..."
-            sudo apt-get update -qq
-            sudo apt-get install -y python3-venv python3-pip nginx rsync certbot python3-certbot-nginx
+        # Copy backend files from GitHub workspace
+        cp -r $GITHUB_WORKSPACE/backend .
 
-            # Verify uploaded files exist
-            echo "🔍 Verifying uploaded files..."
-            if [ ! -d /tmp/bangla_upload/backend ]; then
-              echo "❌ Error: Backend files not found in /tmp/bangla_upload/backend"
-              exit 1
-            fi
-            if [ ! -d /tmp/bangla_upload/deploy ]; then
-              echo "❌ Error: Deploy files not found in /tmp/bangla_upload/deploy"
-              exit 1
-            fi
-            if [ ! -d /tmp/bangla_upload/dist ]; then
-              echo "❌ Error: Frontend dist not found in /tmp/bangla_upload/dist"
-              exit 1
-            fi
-            echo "✅ All files verified"
+        # Install backend dependencies
+        python3 -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install fastapi uvicorn sqlalchemy alembic redis httpx aiohttp requests python-jose passlib python-multipart prometheus-client openai python-dateutil pytz fuzzywuzzy python-levenshtein numpy
 
-            # Move uploaded files to final destination
-            echo "📂 Deploying backend files..."
-            sudo mkdir -p "$VPS_PATH"/backend "$VPS_PATH"/deploy
-            sudo rsync -a /tmp/bangla_upload/backend/ "$VPS_PATH"/backend/
-            sudo rsync -a /tmp/bangla_upload/deploy/ "$VPS_PATH"/deploy/
-            
-            echo "📂 Deploying frontend files..."
-            sudo mkdir -p "$WEBROOT"
-            sudo rsync -az /tmp/bangla_upload/dist/ "$WEBROOT"/
+        # Create .env file
+        cat > .env << ENV_EOF
+        BANG_OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+        BANG_DATABASE_URL=sqlite:///./bangla.db
+        BANG_SECRET_KEY=$(openssl rand -hex 32)
+        BANG_CORS_ORIGINS=["https://$DOMAIN", "http://localhost:3000"]
+        BANG_REDIS_URL=redis://localhost:6379/0
+        ENV_EOF
 
-            # Fix ownership
-            sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} "$VPS_PATH"
-            sudo chown -R www-data:www-data "$WEBROOT"
+        echo "🎨 Setting up frontend..."
+        cd /opt/bangla-ai-customer-care
 
-            # Create .env file with proper configuration
-            echo "⚙️  Configuring environment..."
-            {
-              echo "BANG_DATABASE_URL=sqlite:///./bangla.db"
-              echo "BANG_CORS_ORIGINS=[\"https://bdchatpro.com\",\"https://www.bdchatpro.com\",\"http://localhost:5173\"]"
-              echo "BANG_OPENAI_API_KEY=${OPENAI_API_KEY}"
-              echo "BANG_OPENAI_MODEL=gpt-4o-mini"
-              echo "BANG_OPENAI_MAX_TOKENS=1000"
-              echo "BANG_NLU_MODEL_NAME=sagorsarker/bangla-bert-base"
-              echo "BANG_SECRET_KEY=$(openssl rand -hex 32)"
-              echo "BANG_ALGORITHM=HS256"
-              echo "BANG_ACCESS_TOKEN_EXPIRE_MINUTES=60"
-            } > "$VPS_PATH/.env"
+        # Copy frontend files from GitHub workspace
+        cp -r $GITHUB_WORKSPACE/frontend .
 
-            # Setup systemd service
-            echo "🔧 Setting up systemd service..."
-            sudo sed -e "s#{{USER}}#${{ secrets.VPS_USER }}#g" -e "s#{{APP_PATH}}#${VPS_PATH}#g" \
-              "$VPS_PATH/deploy/systemd/bangla-backend.service" | \
-              sudo tee /etc/systemd/system/bangla-backend.service > /dev/null
+        # Install Node.js dependencies
+        cd frontend
+        npm install
 
-            # Setup backend virtualenv and install dependencies
-            echo "🐍 Setting up Python environment..."
-            cd "$VPS_PATH/backend"
-            if [ ! -d .venv ]; then
-              python3 -m venv .venv
-            fi
-            . .venv/bin/activate
-            pip install --upgrade pip -q
-            pip install -r requirements.txt -q
-            
-            echo "🗄️  Initializing database..."
-            python scripts/init_db.py || true
-            
-            echo "🛍️  Adding sample products..."
-            python scripts/add_sample_products.py || true
-            
-            deactivate
+        # Build the React app if dashboard exists
+        if [ -d "dashboard" ]; then
+          cd dashboard
+          npm install
+          npm run build
+          cd ..
+          # Copy built files to frontend root
+          cp -r dashboard/dist/* . 2>/dev/null || true
+        fi
 
-            # Restart backend service
-            echo "🔄 Restarting backend service..."
-            sudo systemctl daemon-reload
-            sudo systemctl enable bangla-backend
-            sudo systemctl restart bangla-backend
-            sleep 3
-            
-            # Check if backend is running
-            if sudo systemctl is-active --quiet bangla-backend; then
-              echo "✅ Backend service is running"
-            else
-              echo "❌ Backend service failed to start"
-              sudo systemctl status bangla-backend --no-pager || true
-            fi
+        echo "🔒 Setting up SSL certificates..."
+        # Obtain SSL certificate
+        sudo certbot certonly --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email $SSL_EMAIL \
+          -d $DOMAIN \
+          -d www.$DOMAIN
 
-            # Setup Nginx
-            echo "🌐 Configuring Nginx for bdchatpro.com..."
-            sudo sed -e "s#{{DOMAIN}}#${DOMAIN}#g" -e "s#{{WEBROOT}}#${WEBROOT}#g" \
-              "$VPS_PATH/deploy/nginx.bangla.conf" | \
-              sudo tee /etc/nginx/sites-available/bangla > /dev/null
-            
-            # Remove old symbolic link if exists
-            sudo rm -f /etc/nginx/sites-enabled/bangla
-            
-            # Create new symbolic link
-            sudo ln -s /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/bangla
-            
-            # Remove default nginx site (this might be conflicting)
-            sudo rm -f /etc/nginx/sites-enabled/default
-            
-            echo "📋 Enabled Nginx sites:"
-            ls -la /etc/nginx/sites-enabled/
-            
-            # Test nginx config
-            if sudo nginx -t; then
-              echo "✅ Nginx configuration is valid"
-              sudo systemctl reload nginx
-              echo "✅ Nginx reloaded successfully"
-            else
-              echo "❌ Nginx configuration error - check logs"
-              sudo nginx -t 2>\u00261
-              exit 1
-            fi
-            
-            # Verify frontend files are in place
-            echo "📂 Frontend files check:"
-            ls -lah "$WEBROOT" | head -10
+        echo "⚙️ Configuring Nginx..."
+        # Create nginx configuration
+        sudo tee /etc/nginx/sites-available/bangla > /dev/null << NGINX_EOF
+        server {
+            listen 80;
+            listen [::]:80;
+            server_name $DOMAIN www.$DOMAIN;
 
-            # Clean up
-            rm -rf /tmp/bangla_upload /tmp/bangla_upload_old
+            # Redirect HTTP to HTTPS
+            return 301 https://\$server_name\$request_uri;
+        }
 
-            echo ""
-            echo "✅ Deployment completed successfully!"
-            echo "🌐 Your site is now live at: https://$DOMAIN"
-            echo ""
-          ENDSSH
+        server {
+            listen 443 ssl http2;
+            listen [::]:443 ssl http2;
+            server_name $DOMAIN www.$DOMAIN;
 
-      - name: Setup HTTPS with Let's Encrypt
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s <<'ENDSSH'
-            set -euo pipefail
-            
-            DOMAIN="bdchatpro.com"
-            LETSENCRYPT_EMAIL="${{ vars.LETSENCRYPT_EMAIL }}"
-            
-            echo "🔒 Setting up HTTPS certificate..."
-            
-            if [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
-              echo "📧 Using email: $LETSENCRYPT_EMAIL"
-              sudo certbot --nginx -n --agree-tos -m "$LETSENCRYPT_EMAIL" \
-                -d "$DOMAIN" -d "www.$DOMAIN" || echo "⚠️  SSL cert setup failed or already exists"
-            else
-              echo "⚠️  LETSENCRYPT_EMAIL not set. Skipping SSL certificate generation."
-              echo "   You can add it later in repository variables."
-            fi
-            
-            echo "✅ SSL setup complete"
-          ENDSSH
-      
-      - name: Verify deployment
-        run: |
-          echo "🎉 Deployment Summary"
-          echo "===================="
-          echo "✅ Frontend deployed to: https://bdchatpro.com"
-          echo "✅ Backend API: https://bdchatpro.com/api/"
-          echo "✅ API Docs: https://bdchatpro.com/api/docs"
-          echo "✅ Health Check: https://bdchatpro.com/health"
-          echo ""
-          echo "🔍 Testing health endpoint..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "curl -f http://localhost:8000/health || echo '⚠️  Health check failed'"
+            # SSL Configuration with Let's Encrypt certificates
+            ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+            # SSL Security Settings
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers on;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+
+            # Frontend - proxy to port 3002
+            location / {
+                proxy_pass http://127.0.0.1:$FRONTEND_PORT;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade \$http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_cache_bypass \$http_upgrade;
+
+                # Frontend specific settings
+                proxy_buffering off;
+                proxy_request_buffering off;
+            }
+
+            # Backend API proxy
+            location /api/ {
+                proxy_pass http://127.0.0.1:$BACKEND_PORT/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade \$http_upgrade;
+                proxy_set_header Connection "upgrade";
+            }
+
+            # Channels endpoint for WebSocket/real-time features
+            location /channels/ {
+                proxy_pass http://127.0.0.1:$BACKEND_PORT/channels/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+            }
+
+            # Health check endpoint
+            location /health {
+                proxy_pass http://127.0.0.1:$BACKEND_PORT/health;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+            }
+
+            # Gzip compression
+            gzip on;
+            gzip_vary on;
+            gzip_min_length 1024;
+            gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
+        }
+        NGINX_EOF
+
+        # Enable nginx site
+        sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+
+        echo "🔄 Setting up systemd services..."
+        # Create frontend service
+        sudo tee /etc/systemd/system/bangla-frontend.service > /dev/null << FRONTEND_SERVICE_EOF
+        [Unit]
+        Description=Bangla Frontend (Node.js)
+        After=network.target
+
+        [Service]
+        Type=simple
+        User=$USER
+        WorkingDirectory=/opt/bangla-ai-customer-care/frontend
+        ExecStart=/usr/bin/node server.js
+        Restart=always
+        RestartSec=5
+        Environment=PORT=$FRONTEND_PORT
+
+        [Install]
+        WantedBy=multi-user.target
+        FRONTEND_SERVICE_EOF
+
+        # Create backend service
+        sudo tee /etc/systemd/system/bangla-backend.service > /dev/null << BACKEND_SERVICE_EOF
+        [Unit]
+        Description=Bangla Backend (FastAPI)
+        After=network.target
+
+        [Service]
+        Type=simple
+        User=$USER
+        WorkingDirectory=/opt/bangla-ai-customer-care/backend
+        Environment="PATH=/opt/bangla-ai-customer-care/backend/venv/bin"
+        ExecStart=/opt/bangla-ai-customer-care/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT
+        Restart=always
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        BACKEND_SERVICE_EOF
+
+        # Reload systemd and start services
+        sudo systemctl daemon-reload
+
+        echo "▶️ Starting services..."
+        sudo systemctl enable bangla-frontend
+        sudo systemctl enable bangla-backend
+        sudo systemctl start bangla-frontend
+        sudo systemctl start bangla-backend
+
+        # Test nginx configuration
+        sudo nginx -t && sudo systemctl reload nginx
+
+        echo "✅ Deployment completed!"
+        echo "🌐 Frontend: https://$DOMAIN (port $FRONTEND_PORT)"
+        echo "🔧 Backend: http://localhost:$BACKEND_PORT"
+        echo "🔒 SSL: Let's Encrypt certificate for $DOMAIN"
+
+        # Test the deployment
+        echo "🧪 Testing deployment..."
+        sleep 5
+        curl -k https://$DOMAIN/health && echo "✅ Health check passed" || echo "❌ Health check failed"
+        curl -I https://$DOMAIN | head -1 && echo "✅ HTTPS working" || echo "❌ HTTPS failed"
+
+        EOF
