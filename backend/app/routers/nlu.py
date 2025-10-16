@@ -17,15 +17,17 @@ class NLUResolveResponse(BaseModel):
     intent: str
     entities: Dict[str, Any]
     confidence: float
+    model_used: Optional[str] = None
 
 
 @router.post("/resolve", response_model=NLUResolveResponse)
-def resolve(req: NLUResolveRequest) -> NLUResolveResponse:
-    """Resolve intent and entities from Bangla text using NLU service"""
-    result = nlu_service.resolve(req.text, req.context)
-    
+async def resolve(req: NLUResolveRequest) -> NLUResolveResponse:
+    """Resolve intent and entities from Bangla text using OpenAI-powered NLU service"""
+    result = await nlu_service.resolve(req.text, req.context)
+
     return NLUResolveResponse(
         intent=result["intent"],
         entities=result["entities"],
-        confidence=result["confidence"]
+        confidence=result["confidence"],
+        model_used=result.get("model_used")
     )

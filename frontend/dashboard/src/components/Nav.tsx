@@ -10,7 +10,10 @@ import {
   Box,
   Typography,
   Avatar,
-  useTheme
+  useTheme,
+  IconButton,
+  AppBar,
+  Toolbar
 } from '@mui/material'
 import {
   Inbox as InboxIcon,
@@ -22,12 +25,21 @@ import {
   Chat as ChatBubbleLeftRightIcon,
   Label as TagIcon,
   Description as DocumentTextIcon,
-  TableChart as TableCellsIcon
+  TableChart as TableCellsIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material'
 
 const DRAWER_WIDTH = 280
 
-export function Nav({ current, onNavigate }: { current: Page; onNavigate: (p: Page) => void }) {
+interface NavProps {
+  current: Page
+  onNavigate: (p: Page) => void
+  open: boolean
+  onToggle: () => void
+  isMobile: boolean
+}
+
+export function Nav({ current, onNavigate, open, onToggle, isMobile }: NavProps) {
   const theme = useTheme()
 
   const menuItems = [
@@ -45,20 +57,8 @@ export function Nav({ current, onNavigate }: { current: Page; onNavigate: (p: Pa
 
   const sections = ['Inbox', 'Dashboard', 'E-Commerce', 'AI Training', 'Data']
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: DRAWER_WIDTH,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: DRAWER_WIDTH,
-          boxSizing: 'border-box',
-          borderRight: `1px solid ${theme.palette.divider}`,
-          background: theme.palette.background.paper,
-        },
-      }}
-    >
+  const drawerContent = (
+    <>
       {/* Header */}
       <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -106,7 +106,12 @@ export function Nav({ current, onNavigate }: { current: Page; onNavigate: (p: Pa
                   <ListItem key={item.id} disablePadding>
                     <ListItemButton
                       selected={current === item.id}
-                      onClick={() => onNavigate(item.id)}
+                      onClick={() => {
+                        onNavigate(item.id)
+                        if (isMobile) {
+                          onToggle() // Close drawer on mobile after navigation
+                        }
+                      }}
                       sx={{
                         borderRadius: 2,
                         mx: 1,
@@ -184,6 +189,68 @@ export function Nav({ current, onNavigate }: { current: Page; onNavigate: (p: Pa
           </Box>
         </Box>
       </Box>
-    </Drawer>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile App Bar */}
+      {isMobile && (
+        <AppBar
+          position="fixed"
+          sx={{
+            width: '100%',
+            zIndex: theme.zIndex.drawer + 1,
+          }}
+        >
+          <Toolbar>
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={onToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Avatar
+              sx={{
+                bgcolor: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                width: 32,
+                height: 32,
+                mr: 2
+              }}
+            >
+              🇧🇩
+            </Avatar>
+            <Typography variant="h6" noWrap component="div">
+              Bangla AI Customer Service
+            </Typography>
+          </Toolbar>
+        </AppBar>
+      )}
+
+      {/* Drawer */}
+      <Drawer
+        variant={isMobile ? "temporary" : "permanent"}
+        open={isMobile ? open : true}
+        onClose={onToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile
+        }}
+        sx={{
+          width: DRAWER_WIDTH,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: DRAWER_WIDTH,
+            boxSizing: 'border-box',
+            borderRight: `1px solid ${theme.palette.divider}`,
+            background: theme.palette.background.paper,
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+    </>
   )
 }

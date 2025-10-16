@@ -41,7 +41,7 @@ async def voice_gather(SpeechResult: str = Form(default=""), Digits: str = Form(
         return twiml('<Say language="en-US">No input detected. Goodbye.</Say>')
 
     # Process through NLU and Dialogue Manager
-    nlu_res = nlu_service.resolve(user_text)
+    nlu_res = await nlu_service.resolve(user_text)
     dm_res = dialogue_manager.decide(nlu_res["intent"], nlu_res["entities"], {"channel": "voice"})
 
     # Support multiple languages - check if response has language-specific versions

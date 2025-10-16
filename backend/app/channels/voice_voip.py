@@ -90,7 +90,7 @@ async def asterisk_audio_processing(request: Request) -> Response:
             return Response(content=json.dumps(response), media_type="application/json")
 
         # Process through NLU and Dialogue Manager
-        nlu_res = nlu_service.resolve(user_text)
+        nlu_res = await nlu_service.resolve(user_text)
         dm_res = dialogue_manager.decide(nlu_res["intent"], nlu_res["entities"], {"channel": "voice"})
 
         reply_text = dm_res["response_text_bn"]

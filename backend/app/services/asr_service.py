@@ -1,75 +1,82 @@
 """
 ASR Service for multilingual speech recognition
-Uses OpenAI Whisper for all languages with auto-detection
+Uses OpenAI Whisper API for high-quality speech-to-text
 """
-import numpy as np
-from typing import Optional, Dict, Any
-
+import base64
+import io
+from typing import Optional, Dict, Any, Union
+import openai
 from app.core.config import settings
 
 
 class ASRService:
     def __init__(self):
-        self.model_size = settings.whisper_model_size
-        self.model = None
-        
-    def load_model(self):
-        """Load Whisper model (lazy loading). Falls back to mock if unavailable."""
-        if self.model is None:
-            try:
-                import whisper  # lazy import to avoid heavy dep at startup
-                print(f"Loading Whisper model: {self.model_size}")
-                self.model = whisper.load_model(self.model_size)
-            except Exception as e:
-                print(f"Whisper not available, falling back to mock ASR: {e}")
-                self.model = "mock"
+        # Initialize OpenAI client
+        self.client = openai.OpenAI(api_key=settings.openai_api_key)
+        self.model = "whisper-1"  # OpenAI's latest Whisper model
+        print(f"ASR service initialized with OpenAI Whisper API: {self.model}")
     
-    def transcribe(
+    async def transcribe(
         self,
-        audio_data: np.ndarray,
+        audio_data: Union[bytes, io.BytesIO],
         language: Optional[str] = None,
-        sample_rate: int = 16000
+        file_format: str = "wav"
     ) -> Dict[str, Any]:
         """
-        Transcribe audio to text in any language
+        Transcribe audio to text using OpenAI Whisper API
 
         Args:
-            audio_data: Audio as numpy array
+            audio_data: Audio as bytes or BytesIO object
             language: Language code (ISO 639-1), None for auto-detection
-            sample_rate: Audio sample rate
+            file_format: Audio format (wav, mp3, etc.)
 
         Returns:
             Dict with text, confidence, and metadata
         """
-        self.load_model()
+        try:
+            # Prepare audio file for OpenAI API
+            if isinstance(audio_data, bytes):
+                audio_file = io.BytesIO(audio_data)
+            else:
+                audio_file = audio_data
 
-        # Resample if needed (Whisper expects 16kHz)
-        if sample_rate != 16000:
-            # In production, use librosa or scipy for resampling
-            pass
+            audio_file.name = f"audio.{file_format}"  # OpenAI needs a filename
 
-        # Use None for auto-detection, or specific language code
-        whisper_language = None if language is None else language
-
-        if self.model == "mock":
-            result = {"text": "", "language": language or "unknown", "segments": []}
-        else:
-            result = self.model.transcribe(
-                audio_data,
-                language=whisper_language,
-                task="transcribe",
-                fp16=False  # Set to True if using GPU
+            # Call OpenAI Whisper API
+            response = await self.client.audio.transcriptions.create(
+                model=self.model,
+                file=audio_file,
+                language=language if language and language != "auto" else None,
+                response_format="verbose_json",  # Get detailed response with confidence
+                temperature=0  # More deterministic results
             )
 
-        detected_language = result.get("language", language or "unknown")
+            # Extract confidence from segments if available
+            confidence = 0.8  # Default confidence
+            if hasattr(response, 'segments') and response.segments:
+                # Average confidence across segments
+                confidences = [seg.get('confidence', 0.8) for seg in response.segments if 'confidence' in seg]
+                if confidences:
+                    confidence = sum(confidences) / len(confidences)
 
-        return {
-            "text": result["text"],
-            "language": detected_language,
-            "language_confidence": result.get("language_probability", 0.0),
-            "segments": result.get("segments", []),
-            "confidence": self._calculate_confidence(result)
-        }
+            return {
+                "text": response.text.strip(),
+                "confidence": confidence,
+                "language": getattr(response, 'language', language or 'bn'),
+                "model_used": self.model,
+                "segments": getattr(response, 'segments', []),
+                "duration": getattr(response, 'duration', None)
+            }
+
+        except Exception as e:
+            print(f"ASR transcription error: {e}")
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "language": language or "unknown",
+                "error": str(e),
+                "model_used": self.model
+            }
     
     def _calculate_confidence(self, result: Dict[str, Any]) -> float:
         """Calculate average confidence from segments"""

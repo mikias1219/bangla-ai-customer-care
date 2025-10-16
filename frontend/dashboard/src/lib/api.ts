@@ -8,5 +8,5 @@ declare global {
 }
 
 export function apiBase() {
-  return import.meta.env?.VITE_API_BASE || 'http://localhost:8000'
+  return import.meta.env?.VITE_API_BASE || '/api'
 }
