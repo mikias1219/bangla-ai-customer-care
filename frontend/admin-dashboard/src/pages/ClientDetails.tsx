@@ -136,7 +136,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       } else {
         setAgentResponse({ error: 'Failed to test agent', status: response.status });
       }
-    } catch (error) {
+    } catch (error: any) {
       setAgentResponse({ error: 'Network error', details: error.message });
     } finally {
       setTestingAgent(false);
@@ -179,7 +179,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       )}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
           <Tab label="Client Info" />
           <Tab label="Users" />
           <Tab label="Agent Testing" />
