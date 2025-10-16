@@ -101,12 +101,15 @@ jobs:
 
       - name: Deploy Backend
         run: |
+          # First, copy the backend files to the server
+          scp -o StrictHostKeyChecking=no -r backend $SSH_USER@$SSH_HOST:/tmp/
+
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🔧 Setting up backend..."
             cd /opt/bangla-ai-customer-care
             echo "📋 Copying backend files..."
-            cp -r \$GITHUB_WORKSPACE/backend .
+            cp -r /tmp/backend .
             echo "🐍 Installing backend dependencies..."
             python3 -m venv venv
             source venv/bin/activate
@@ -125,12 +128,15 @@ jobs:
 
       - name: Deploy Frontend
         run: |
+          # First, copy the frontend files to the server
+          scp -o StrictHostKeyChecking=no -r frontend $SSH_USER@$SSH_HOST:/tmp/
+
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🎨 Setting up frontend..."
             cd /opt/bangla-ai-customer-care
             echo "📋 Copying frontend files..."
-            cp -r \$GITHUB_WORKSPACE/frontend .
+            cp -r /tmp/frontend .
             echo "📦 Installing Node.js dependencies..."
             cd frontend
             npm install
