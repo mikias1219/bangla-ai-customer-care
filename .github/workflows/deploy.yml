@@ -39,8 +39,8 @@ jobs:
           echo "🧹 Running server cleanup and fixes..."
           scp -o StrictHostKeyChecking=no deploy/cleanup-server.sh $SSH_USER@$SSH_HOST:/tmp/
           scp -o StrictHostKeyChecking=no deploy/fix-dpkg.sh $SSH_USER@$SSH_HOST:/tmp/
-          scp -o StrictHostKeyChecking=no deploy/fix-nodejs.sh $SSH_USER@$SSH_HOST:/tmp/
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "chmod +x /tmp/cleanup-server.sh /tmp/fix-dpkg.sh /tmp/fix-nodejs.sh && sudo /tmp/fix-dpkg.sh && sudo /tmp/fix-nodejs.sh && sudo /tmp/cleanup-server.sh"
+          scp -o StrictHostKeyChecking=no deploy/quick-fix-nodejs.sh $SSH_USER@$SSH_HOST:/tmp/
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "chmod +x /tmp/cleanup-server.sh /tmp/fix-dpkg.sh /tmp/quick-fix-nodejs.sh && sudo /tmp/fix-dpkg.sh && sudo /tmp/quick-fix-nodejs.sh && sudo /tmp/cleanup-server.sh"
 
       - name: System Update and Package Installation
         run: |

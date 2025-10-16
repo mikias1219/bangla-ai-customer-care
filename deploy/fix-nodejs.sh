@@ -17,37 +17,43 @@ else
   echo "❌ npm not found"
 fi
 
-# Fix broken packages first
-echo "🔧 Fixing broken packages..."
-sudo apt --fix-broken install -y
+# The issue: Node.js from nodesource comes with npm bundled, but Ubuntu's npm package conflicts
+# Solution: Remove Ubuntu's npm package and use the one that comes with Node.js
 
-# Try to install npm properly
-echo "📦 Installing npm..."
-if ! sudo apt install -y npm; then
-  echo "⚠️  Standard npm installation failed, trying alternative approach..."
+echo "🔧 Removing conflicting Ubuntu npm package..."
+sudo apt remove --purge -y npm 2>/dev/null || true
 
-  # Remove conflicting packages
-  echo "🗑️ Removing conflicting packages..."
-  sudo apt remove --purge -y npm node-* 2>/dev/null || true
-  sudo apt autoremove -y
-  sudo apt autoclean
+echo "🧹 Cleaning up package conflicts..."
+sudo apt autoremove -y
+sudo apt autoclean
 
-  # Reinstall Node.js and npm
-  echo "🔄 Reinstalling Node.js and npm..."
-  sudo apt install -y nodejs npm
+# Check if npm is available through Node.js
+echo "🔍 Checking if npm is available through Node.js..."
+if command -v npm &> /dev/null; then
+  echo "✅ npm is working through Node.js: $(npm --version)"
+else
+  echo "⚠️  npm still not available, trying to reinstall Node.js..."
+  # Reinstall Node.js (which should bring npm with it)
+  sudo apt install -y nodejs
 fi
 
-# Update npm to latest version
-echo "⬆️ Updating npm to latest version..."
-sudo npm install -g npm@latest
+# Make sure npm is working
+if command -v npm &> /dev/null; then
+  # Update npm to latest version using itself
+  echo "⬆️ Updating npm to latest version..."
+  sudo npm install -g npm@latest 2>/dev/null || echo "⚠️  npm update failed, but npm should still work"
+
+  # Clear npm cache
+  echo "🧹 Clearing npm cache..."
+  npm cache clean --force 2>/dev/null || true
+else
+  echo "❌ npm is still not working. Manual intervention may be needed."
+  exit 1
+fi
 
 # Verify installation
 echo "🔍 Verifying installations..."
 node --version && echo "✅ Node.js: $(node --version)"
 npm --version && echo "✅ npm: $(npm --version)"
-
-# Clear npm cache
-echo "🧹 Clearing npm cache..."
-npm cache clean --force
 
 echo "✅ Node.js and npm installation completed successfully!"
