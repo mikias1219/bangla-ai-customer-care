@@ -17,6 +17,7 @@ class NLUResolveResponse(BaseModel):
     intent: str
     entities: Dict[str, Any]
     confidence: float
+    language: str
     model_used: Optional[str] = None
 
 
@@ -29,5 +30,6 @@ async def resolve(req: NLUResolveRequest) -> NLUResolveResponse:
         intent=result["intent"],
         entities=result["entities"],
         confidence=result["confidence"],
+        language=result.get("language", "unknown"),
         model_used=result.get("model_used")
     )

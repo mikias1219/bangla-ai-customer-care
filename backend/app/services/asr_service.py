@@ -46,7 +46,7 @@ class ASRService:
             response = await self.client.audio.transcriptions.create(
                 model=self.model,
                 file=audio_file,
-                language=language if language and language != "auto" else None,
+                language=None,  # Auto-detect language for multi-language support
                 response_format="verbose_json",  # Get detailed response with confidence
                 temperature=0  # More deterministic results
             )

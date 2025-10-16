@@ -29,30 +29,79 @@ class NLUService:
         ]
 
         # Bangla intent examples for better classification
+        # Multi-language intent examples
         self.intent_examples = {
             "order_status": [
+                # Bangla
                 "আমার অর্ডার কোথায়?", "অর্ডার স্ট্যাটাস কি?", "আমার প্রোডাক্ট কবে আসবে?",
-                "My order where?", "Order status check", "When will my product arrive?"
+                # English
+                "Where is my order?", "Order status check", "When will my product arrive?",
+                # Hindi
+                "मेरा ऑर्डर कहाँ है?", "ऑर्डर की स्थिति क्या है?", "मेरा प्रोडक्ट कब आएगा?",
+                # Arabic
+                "أين طلبي؟", "حالة الطلب", "متى سيصل منتجي؟",
+                # Urdu
+                "میرا آرڈر کہاں ہے؟", "آرڈر کی حیثیت کیا ہے؟", "میرا پروڈکٹ کب آئے گا؟"
             ],
             "return_request": [
+                # Bangla
                 "প্রোডাক্ট রিটার্ন করব", "ফেরত দিতে চাই", "রিটার্ন প্রসেস কি?",
-                "I want to return product", "Return process", "How to return?"
+                # English
+                "I want to return product", "Return process", "How to return?",
+                # Hindi
+                "मैं प्रोडक्ट वापस करना चाहता हूं", "वापसी प्रक्रिया क्या है?", "कैसे वापस करें?",
+                # Arabic
+                "أريد إرجاع المنتج", "عملية الإرجاع", "كيف أرجع؟",
+                # Urdu
+                "میں پروڈکٹ واپس کرنا چاہتا ہوں", "واپسی کی عمل کیا ہے؟", "کیسے واپس کریں؟"
             ],
             "product_inquiry": [
+                # Bangla
                 "এই প্রোডাক্ট আছে?", "প্রোডাক্ট ডিটেলস বলুন", "কত দাম?",
-                "Is this product available?", "Product details", "What is the price?"
+                # English
+                "Is this product available?", "Product details", "What is the price?",
+                # Hindi
+                "यह प्रोडक्ट उपलब्ध है?", "प्रोडक्ट की डिटेल्स बताएं", "कीमत क्या है?",
+                # Arabic
+                "هل هذا المنتج متوفر؟", "تفاصيل المنتج", "ما السعر؟",
+                # Urdu
+                "کیا یہ پروڈکٹ دستیاب ہے؟", "پروڈکٹ کی تفصیلات بتائیں", "قیمت کیا ہے؟"
             ],
             "payment_issue": [
+                # Bangla
                 "পেমেন্ট হয়নি", "টাকা কাটেনি", "পেমেন্ট ফেইলড",
-                "Payment not received", "Money not deducted", "Payment failed"
+                # English
+                "Payment not received", "Money not deducted", "Payment failed",
+                # Hindi
+                "भुगतान नहीं हुआ", "पैसे नहीं कटे", "भुगतान विफल",
+                # Arabic
+                "لم يتم الدفع", "لم يتم خصم المال", "فشل الدفع",
+                # Urdu
+                "ادائیگی نہیں ہوئی", "پیسے نہیں کٹے", "ادائیگی ناکام"
             ],
             "delivery_tracking": [
+                # Bangla
                 "ডেলিভারি কোথায়?", "কুরিয়ার স্ট্যাটাস", "প্রোডাক্ট রোডে আছে?",
-                "Where is delivery?", "Courier status", "Is product on the way?"
+                # English
+                "Where is delivery?", "Courier status", "Is product on the way?",
+                # Hindi
+                "डिलीवरी कहाँ है?", "कूरियर की स्थिति", "प्रोडक्ट रास्ते में है?",
+                # Arabic
+                "أين التسليم؟", "حالة البريد", "هل المنتج في الطريق؟",
+                # Urdu
+                "ڈیلیوری کہاں ہے؟", "کورئیر کی حیثیت", "کیا پروڈکٹ راستے میں ہے؟"
             ],
             "complaint": [
+                # Bangla
                 "সমস্যা আছে", "খারাপ সার্ভিস", "অভিযোগ করছি",
-                "There is problem", "Bad service", "I want to complain"
+                # English
+                "There is problem", "Bad service", "I want to complain",
+                # Hindi
+                "समस्या है", "खराब सेवा", "शिकायत करना चाहता हूं",
+                # Arabic
+                "يوجد مشكلة", "خدمة سيئة", "أريد الشكوى",
+                # Urdu
+                "مسئلہ ہے", "برا سروس", "میں شکایت کرنا چاہتا ہوں"
             ]
         }
         
@@ -171,23 +220,24 @@ class NLUService:
 
             prompt = f"""
             Classify this customer service query into the most appropriate intent category.
-            Analyze the customer's intent in the context of Bangladeshi e-commerce customer service.
+            This is a multi-language customer service system supporting Bangla, English, Hindi, Arabic, Urdu, and other languages.
 
             Query: "{text}"
 
             Available intents:
             {chr(10).join([f"- {intent}: {desc}" for intent, desc in intent_descriptions.items()])}
 
-            Consider Bangla language patterns and common customer service scenarios in Bangladesh.
+            Analyze the query in any language and determine the customer's intent.
+            Consider common customer service scenarios across different cultures and languages.
 
             Respond with ONLY a JSON object in this exact format:
-            {{"intent": "intent_name", "confidence": 0.95, "reasoning": "brief explanation"}}
+            {{"intent": "intent_name", "confidence": 0.95, "language": "detected_language", "reasoning": "brief explanation"}}
             """
 
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an expert Bangladeshi customer service intent classifier. Always return valid JSON with intent, confidence (0.0-1.0), and reasoning."},
+                    {"role": "system", "content": "You are an expert multi-language customer service intent classifier supporting Bangla, English, Hindi, Arabic, Urdu, and other languages. Always return valid JSON with intent, confidence (0.0-1.0), language, and reasoning."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=200,
@@ -206,37 +256,115 @@ class NLUService:
                 result = json.loads(result_text)
                 intent = result.get('intent', 'fallback')
                 confidence = float(result.get('confidence', 0.5))
+                language = result.get('language', 'unknown')
 
                 # Ensure intent is valid
                 if intent not in self.intent_labels:
                     intent = 'fallback'
                     confidence = 0.3
 
-                return intent, confidence
+                return intent, confidence, language
 
             except (json.JSONDecodeError, ValueError, KeyError) as e:
                 print(f"Failed to parse intent classification response: {result_text}, error: {e}")
-                return "fallback", 0.3
+                return "fallback", 0.3, "unknown"
 
         except Exception as e:
             print(f"Intent classification error: {e}")
             # Fallback to keyword-based classification
             return self._classify_intent_keywords(text)
 
-    def _classify_intent_keywords(self, text: str) -> tuple[str, float]:
+    def _classify_intent_keywords(self, text: str) -> tuple[str, float, str]:
         """
-        Fallback keyword-based intent classification
+        Fallback keyword-based intent classification with language detection
         """
         text_lower = text.lower()
 
+        # Multi-language keyword patterns
         keywords = {
-            "order_status": ["order", "অর্ডার", "status", "কোথায়", "kothay", "আসবে", "আছে"],
-            "return_request": ["return", "রিটার্ন", "ফেরত", "ferot", "ফেরত"],
-            "product_inquiry": ["product", "প্রোডাক্ট", "available", "আছে", "দাম", "price"],
-            "payment_issue": ["payment", "পেমেন্ট", "টাকা", "taka", "কাটেনি"],
-            "delivery_tracking": ["delivery", "ডেলিভারি", "courier", "কুরিয়ার", "রোডে"],
-            "complaint": ["complaint", "অভিযোগ", "problem", "সমস্যা", "খারাপ"]
+            "order_status": [
+                # English
+                "order", "status", "where", "when", "arrive",
+                # Bangla
+                "অর্ডার", "কোথায়", "কবে", "আসবে", "আছে",
+                # Hindi
+                "ऑर्डर", "कहाँ", "कब", "आएगा", "है",
+                # Arabic
+                "طلب", "أين", "متى", "سيصل", "موجود",
+                # Urdu
+                "آرڈر", "کہاں", "کب", "آئے گا", "ہے"
+            ],
+            "return_request": [
+                # English
+                "return", "refund", "back",
+                # Bangla
+                "রিটার্ন", "ফেরত", "ferot",
+                # Hindi
+                "वापस", "रिटर्न", "वापसी",
+                # Arabic
+                "إرجاع", "إعادة", "رد",
+                # Urdu
+                "واپس", "ریٹرن", "واپسی"
+            ],
+            "product_inquiry": [
+                # English
+                "product", "available", "price", "cost", "details",
+                # Bangla
+                "প্রোডাক্ট", "আছে", "দাম", "ডিটেলস",
+                # Hindi
+                "प्रोडक्ट", "उपलब्ध", "कीमत", "विवरण",
+                # Arabic
+                "منتج", "متوفر", "سعر", "تفاصيل",
+                # Urdu
+                "پروڈکٹ", "دستیاب", "قیمت", "تفصیلات"
+            ],
+            "payment_issue": [
+                # English
+                "payment", "pay", "money", "taka", "failed",
+                # Bangla
+                "পেমেন্ট", "টাকা", "কাটেনি", "ফেইলড",
+                # Hindi
+                "भुगतान", "पैसे", "नहीं", "विफल",
+                # Arabic
+                "دفع", "مال", "لم", "فشل",
+                # Urdu
+                "ادائیگی", "پیسے", "نہیں", "ناکام"
+            ],
+            "delivery_tracking": [
+                # English
+                "delivery", "courier", "tracking", "shipped",
+                # Bangla
+                "ডেলিভারি", "কুরিয়ার", "রোডে", "পাঠানো",
+                # Hindi
+                "डिलीवरी", "कूरियर", "ट्रैकिंग", "भेजा",
+                # Arabic
+                "تسليم", "بريد", "تتبع", "شحن",
+                # Urdu
+                "ڈیلیوری", "کورئیر", "ٹریکنگ", "بھیجا"
+            ],
+            "complaint": [
+                # English
+                "complaint", "problem", "issue", "bad", "wrong",
+                # Bangla
+                "অভিযোগ", "সমস্যা", "খারাপ", "ভুল",
+                # Hindi
+                "शिकायत", "समस्या", "बुरा", "गलत",
+                # Arabic
+                "شكوى", "مشكلة", "سيء", "خطأ",
+                # Urdu
+                "شکایت", "مسئلہ", "برا", "غلط"
+            ]
         }
+
+        # Simple language detection based on script
+        if any('\u0980' <= char <= '\u09FF' for char in text):
+            detected_lang = "bn"  # Bangla
+        elif any('\u0600' <= char <= '\u06FF' for char in text):
+            detected_lang = "ar"  # Arabic
+        elif any('\u0900' <= char <= '\u097F' for char in text):
+            detected_lang = "hi"  # Hindi/Urdu
+        else:
+            detected_lang = "en"  # English or other Latin scripts
 
         scores = {}
         for intent, words in keywords.items():
@@ -247,15 +375,15 @@ class NLUService:
         if scores:
             best_intent = max(scores, key=scores.get)
             confidence = min(0.8, 0.4 + scores[best_intent] * 0.1)
-            return best_intent, confidence
+            return best_intent, confidence, detected_lang
 
-        return "fallback", 0.3
+        return "fallback", 0.3, detected_lang
     
     async def resolve(self, text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Main NLU resolution method
         """
-        intent, confidence = await self.classify_intent(text)
+        intent, confidence, language = await self.classify_intent(text)
         entities = await self.extract_entities(text)
 
         return {
@@ -263,6 +391,7 @@ class NLUService:
             "confidence": confidence,
             "entities": entities,
             "text": text,
+            "language": language,
             "model_used": self.model,
             "context": context or {}
         }
