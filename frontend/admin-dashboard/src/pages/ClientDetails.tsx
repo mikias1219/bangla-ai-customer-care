@@ -486,7 +486,6 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
           </Grid>
         </Grid>
       )}
-      </Grid>
 
       {/* Create User Dialog */}
       <Dialog open={showCreateUser} onClose={() => setShowCreateUser(false)} maxWidth="sm" fullWidth>
