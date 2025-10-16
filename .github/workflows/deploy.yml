@@ -43,13 +43,31 @@ jobs:
       - name: Prepare remote directories
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "mkdir -p '${{ secrets.VPS_PATH }}' /tmp/bangla_upload"
+            "rm -rf /tmp/bangla_upload && mkdir -p /tmp/bangla_upload/backend /tmp/bangla_upload/deploy /tmp/bangla_upload/dist '${{ secrets.VPS_PATH }}'"
 
-      - name: Upload backend, deploy scripts, and built frontend
+      - name: Upload backend files
         run: |
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" --delete frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
+          echo "📦 Uploading backend..."
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" backend/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/backend/
+          echo "✅ Backend uploaded"
+
+      - name: Upload deploy scripts
+        run: |
+          echo "📦 Uploading deploy scripts..."
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" deploy/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/deploy/
+          echo "✅ Deploy scripts uploaded"
+
+      - name: Upload frontend dist
+        run: |
+          echo "📦 Uploading frontend..."
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" frontend/dashboard/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bangla_upload/dist/
+          echo "✅ Frontend uploaded"
+      
+      - name: Verify uploads
+        run: |
+          echo "🔍 Verifying uploaded files..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "ls -la /tmp/bangla_upload/ && ls -la /tmp/bangla_upload/backend/ && ls -la /tmp/bangla_upload/deploy/ && ls -la /tmp/bangla_upload/dist/"
 
       - name: Remote deploy & restart
         env:
