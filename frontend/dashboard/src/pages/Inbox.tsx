@@ -35,7 +35,10 @@ import {
   AccessTime as AccessTimeIcon,
   Chat as ChatBubbleLeftRightIcon,
   Menu as MenuIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Facebook as FacebookIcon,
+  WhatsApp as WhatsAppIcon,
+  Instagram as InstagramIcon
 } from '@mui/icons-material'
 
 // Helper function to format time
@@ -75,6 +78,20 @@ interface Conversation {
   conversation_metadata?: Record<string, any>
   turns?: Message[]
 }
+
+// Add CSS animations
+const globalStyles = `
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
 
 export function Inbox() {
   const [activeChannel, setActiveChannel] = useState<'messenger' | 'whatsapp' | 'instagram'>('messenger')
@@ -137,6 +154,18 @@ export function Inbox() {
       fetchConversationDetails(parseInt(activeConversation))
     }
   }, [activeConversation])
+
+  // Inject global styles for animations
+  useEffect(() => {
+    const styleSheet = document.createElement('style');
+    styleSheet.type = 'text/css';
+    styleSheet.innerText = globalStyles;
+    document.head.appendChild(styleSheet);
+
+    return () => {
+      document.head.removeChild(styleSheet);
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -422,26 +451,40 @@ export function Inbox() {
           {/* Channel tabs */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {[
-              { id: 'messenger' as const, label: isMobile ? 'FB' : 'Messenger', color: getChannelColor('messenger'), emoji: '💙' },
-              { id: 'whatsapp' as const, label: isMobile ? 'WA' : 'WhatsApp', color: getChannelColor('whatsapp'), emoji: '💚' },
-              { id: 'instagram' as const, label: isMobile ? 'IG' : 'Instagram', color: getChannelColor('instagram'), emoji: '💜' }
-            ].map(({ id, label, color, emoji }) => (
+              { id: 'messenger' as const, label: isMobile ? 'FB' : 'Messenger', color: getChannelColor('messenger'), icon: FacebookIcon },
+              { id: 'whatsapp' as const, label: isMobile ? 'WA' : 'WhatsApp', color: getChannelColor('whatsapp'), icon: WhatsAppIcon },
+              { id: 'instagram' as const, label: isMobile ? 'IG' : 'Instagram', color: getChannelColor('instagram'), icon: InstagramIcon }
+            ].map(({ id, label, color, icon: Icon }) => (
               <Button
                 key={id}
                 onClick={() => setActiveChannel(id)}
                 variant={activeChannel === id ? 'contained' : 'outlined'}
-                startIcon={!isMobile && <Box sx={{ fontSize: '1.2rem' }}>{emoji}</Box>}
+                startIcon={!isMobile && <Icon sx={{ fontSize: '1.2rem' }} />}
                 size={isMobile ? 'small' : 'medium'}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 3,
                   textTransform: 'none',
-                  fontWeight: 500,
+                  fontWeight: 600,
                   minWidth: isMobile ? 50 : 120,
+                  py: 1.5,
+                  px: 2,
+                  boxShadow: activeChannel === id ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  transition: 'all 0.2s ease-in-out',
                   ...(activeChannel === id && {
                     backgroundColor: color,
                     borderColor: color,
-                    '&:hover': { backgroundColor: alpha(color, 0.8) }
-                  })
+                    color: 'white',
+                    transform: 'translateY(-1px)',
+                    '&:hover': {
+                      backgroundColor: alpha(color, 0.9),
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                    }
+                  }),
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                  }
                 }}
               >
                 {label}
@@ -574,66 +617,147 @@ export function Inbox() {
                   p: { xs: 2, md: 3 },
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
-                  bgcolor: 'grey.50'
+                  gap: 1,
+                  bgcolor: alpha(theme.palette.background.default, 0.8),
+                  backgroundImage: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.05)} 0%, ${alpha(theme.palette.background.paper, 0.02)} 100%)`,
+                  backgroundAttachment: 'fixed'
                 }}
               >
-                {messages.map((message) => (
+                {messages.map((message, index) => (
                   <Box
                     key={message.id || message.turn_index}
                     sx={{
                       display: 'flex',
                       justifyContent: message.speaker === 'user' ? 'flex-end' : 'flex-start',
+                      mb: 2,
+                      animation: 'fadeInUp 0.3s ease-out',
+                      animationDelay: `${index * 0.1}s`,
+                      animationFillMode: 'both'
                     }}
                   >
                     <Box
                       sx={{
                         maxWidth: { xs: '85%', sm: '70%', md: '60%' },
-                        px: 2,
-                        py: 1.5,
-                        borderRadius: 3,
+                        px: 3,
+                        py: 2,
+                        borderRadius: message.speaker === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        position: 'relative',
+                        transition: 'all 0.2s ease-in-out',
                         ...(message.speaker === 'user'
                           ? {
-                              bgcolor: 'primary.main',
-                              color: 'primary.contrastText',
-                              borderBottomRightRadius: 1,
+                              bgcolor: getChannelColor(activeChannel),
+                              color: 'white',
+                              boxShadow: `0 2px 8px ${alpha(getChannelColor(activeChannel), 0.3)}`,
+                              '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                bottom: -2,
+                                right: 16,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '8px solid transparent',
+                                borderRight: '8px solid transparent',
+                                borderTop: `8px solid ${getChannelColor(activeChannel)}`,
+                              }
                             }
                           : {
                               bgcolor: 'background.paper',
                               color: 'text.primary',
-                              borderBottomLeftRadius: 1,
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                              boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+                              border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                              '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                bottom: -2,
+                                left: 16,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '8px solid transparent',
+                                borderRight: '8px solid transparent',
+                                borderTop: `8px solid ${theme.palette.background.paper}`,
+                              }
                             }
                         ),
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                          boxShadow: message.speaker === 'user'
+                            ? `0 4px 16px ${alpha(getChannelColor(activeChannel), 0.4)}`
+                            : '0 4px 16px rgba(0,0,0,0.15)'
+                        }
                       }}
                     >
-                      <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          wordBreak: 'break-word',
+                          lineHeight: 1.5,
+                          fontWeight: 400
+                        }}
+                      >
                         {message.text}
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: message.speaker === 'user' ? 'flex-end' : 'flex-start',
+                        gap: 1,
+                        mt: 1,
+                        flexWrap: 'wrap'
+                      }}>
                         <Typography
                           variant="caption"
                           sx={{
                             opacity: 0.7,
+                            fontSize: '0.7rem'
                           }}
                         >
                           {formatTime(new Date(message.timestamp))}
                         </Typography>
+
                         {message.intent && (
                           <Chip
-                            label={`${message.intent} (${message.nlu_confidence?.toFixed(2) || 'N/A'})`}
+                            label={`${message.intent}${message.nlu_confidence ? ` (${(message.nlu_confidence * 100).toFixed(0)}%)` : ''}`}
                             size="small"
-                            variant="outlined"
-                            sx={{ height: 16, fontSize: '0.6rem' }}
+                            variant="filled"
+                            sx={{
+                              height: 18,
+                              fontSize: '0.65rem',
+                              bgcolor: message.speaker === 'user' ? 'rgba(255,255,255,0.2)' : alpha(theme.palette.primary.main, 0.1),
+                              color: message.speaker === 'user' ? 'white' : 'primary.main',
+                              borderRadius: 1
+                            }}
                           />
                         )}
+
                         {message.handoff_flag && (
                           <Chip
-                            label="Handoff"
+                            label="🤝 Handoff"
                             size="small"
-                            color="warning"
-                            sx={{ height: 16, fontSize: '0.6rem' }}
+                            sx={{
+                              height: 18,
+                              fontSize: '0.65rem',
+                              bgcolor: 'warning.main',
+                              color: 'warning.contrastText',
+                              borderRadius: 1
+                            }}
                           />
+                        )}
+
+                        {message.speaker === 'bot' && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box
+                              sx={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                bgcolor: 'success.main'
+                              }}
+                            />
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', opacity: 0.7 }}>
+                              AI Assistant
+                            </Typography>
+                          </Box>
                         )}
                       </Box>
                     </Box>
@@ -664,54 +788,102 @@ export function Inbox() {
               </Box>
 
               {/* Message input */}
-              <Box
+              <Paper
+                elevation={0}
                 sx={{
                   borderTop: `1px solid ${theme.palette.divider}`,
-                  p: { xs: 1.5, md: 2 },
-                  display: 'flex',
-                  gap: { xs: 1, md: 2 },
-                  alignItems: 'flex-end',
-                  bgcolor: 'background.paper'
+                  p: { xs: 2, md: 3 },
+                  borderRadius: 0,
+                  bgcolor: alpha(theme.palette.background.paper, 0.95),
+                  backdropFilter: 'blur(10px)'
                 }}
               >
-                <TextField
-                  fullWidth
-                  value={input}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-                  onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  variant="outlined"
-                  size="small"
-                  multiline
-                  maxRows={4}
+                <Box
                   sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
-                      bgcolor: 'grey.50'
-                    },
-                  }}
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={!input.trim() || isTyping}
-                  variant="contained"
-                  endIcon={<SendIcon />}
-                  sx={{
-                    borderRadius: 3,
-                    px: { xs: 2, md: 3 },
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    minWidth: { xs: 80, md: 100 }
+                    display: 'flex',
+                    gap: { xs: 1, md: 2 },
+                    alignItems: 'flex-end',
+                    position: 'relative'
                   }}
                 >
-                  {!isMobile && 'Send'}
-                </Button>
-              </Box>
+                  <TextField
+                    fullWidth
+                    value={input}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                    onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        if (input.trim() && !isTyping) {
+                          sendMessage()
+                        }
+                      }
+                    }}
+                    placeholder="Type your message... (Press Enter to send)"
+                    variant="outlined"
+                    size="small"
+                    multiline
+                    maxRows={4}
+                    disabled={isTyping}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 4,
+                        bgcolor: 'background.paper',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        },
+                        '&.Mui-focused': {
+                          boxShadow: `0 0 0 3px ${alpha(getChannelColor(activeChannel), 0.1)}`,
+                        }
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: alpha(theme.palette.divider, 0.5),
+                      }
+                    }}
+                  />
+
+                  <IconButton
+                    onClick={sendMessage}
+                    disabled={!input.trim() || isTyping}
+                    sx={{
+                      bgcolor: input.trim() && !isTyping ? getChannelColor(activeChannel) : 'grey.300',
+                      color: 'white',
+                      borderRadius: 3,
+                      width: { xs: 48, md: 56 },
+                      height: { xs: 48, md: 56 },
+                      boxShadow: input.trim() && !isTyping ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        bgcolor: input.trim() && !isTyping ? alpha(getChannelColor(activeChannel), 0.9) : 'grey.400',
+                        transform: input.trim() && !isTyping ? 'scale(1.05)' : 'none',
+                        boxShadow: input.trim() && !isTyping ? '0 6px 20px rgba(0,0,0,0.3)' : 'none'
+                      },
+                      '&:disabled': {
+                        bgcolor: 'grey.300',
+                        color: 'grey.500',
+                        cursor: 'not-allowed'
+                      }
+                    }}
+                  >
+                    {isTyping ? (
+                      <CircularProgress size={20} sx={{ color: 'white' }} />
+                    ) : (
+                      <SendIcon sx={{ fontSize: { xs: 20, md: 24 } }} />
+                    )}
+                  </IconButton>
+                </Box>
+
+                {/* Typing indicator */}
+                {isTyping && (
+                  <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={14} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                      AI is typing...
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
             </>
           ) : (
             <Box
