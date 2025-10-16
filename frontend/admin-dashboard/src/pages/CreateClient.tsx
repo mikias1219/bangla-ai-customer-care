@@ -13,7 +13,7 @@ import {
   InputLabel,
   Alert
 } from '@mui/material';
-import { adminApi, Client } from '../lib/api';
+import { adminApi } from '../lib/api';
 
 interface CreateClientProps {
   onBack: () => void;

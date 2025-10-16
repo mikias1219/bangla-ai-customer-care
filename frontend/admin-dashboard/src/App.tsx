@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import {
   ThemeProvider,
   createTheme,
@@ -132,13 +132,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       headerName: 'AI Balance',
       width: 100,
       type: 'number',
-      valueFormatter: (params) => `৳${params.value}`
+      valueFormatter: (params: any) => `৳${params.value}`
     },
     {
       field: 'created_at',
       headerName: 'Created',
       width: 150,
-      valueFormatter: (params) => new Date(params.value).toLocaleDateString()
+      valueFormatter: (params: any) => new Date(params.value as string).toLocaleDateString()
     },
   ];
 
@@ -186,8 +186,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             rows={clients}
             columns={columns}
             loading={loading}
-            pageSize={10}
-            rowsPerPageOptions={[10, 25, 50]}
+            initialState={{
+              pagination: {
+                paginationModel: { page: 0, pageSize: 10 },
+              },
+            }}
+            pageSizeOptions={[10, 25, 50]}
             onRowClick={(params) => setSelectedClient(params.row as Client)}
             sx={{ border: 0 }}
           />
@@ -204,7 +208,7 @@ function App() {
     setIsAuthenticated(adminApi.isAuthenticated());
   }, []);
 
-  const handleLogin = (token: string) => {
+  const handleLogin = (_token: string) => {
     setIsAuthenticated(true);
   };
 
