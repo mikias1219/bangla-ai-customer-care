@@ -24,9 +24,17 @@ jobs:
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
-        echo "$SSH_KEY" > ~/.ssh/id_rsa
+        # Clean up the SSH key (remove any extra whitespace/newlines)
+        echo "$SSH_KEY" | tr -d '\r' | sed 's/^ *//;s/ *$//' > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
+        # Verify SSH key format
+        if ! ssh-keygen -l -f ~/.ssh/id_rsa > /dev/null 2>&1; then
+          echo "❌ Invalid SSH key format"
+          exit 1
+        fi
         ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+        # Test SSH connection
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $SSH_USER@$SSH_HOST "echo 'SSH connection successful'"
 
     - name: Deploy to VPS
       run: |
