@@ -156,8 +156,14 @@ export function Inbox() {
     setIsTyping(true)
 
     try {
-      // Call backend NLU API for real GPT-powered response
-      const response = await fetch('/api/v0/nlu/resolve', {
+      // Build conversation history for context
+      const conversationHistory = messages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      }))
+
+      // Call backend Chat API for real GPT-powered response
+      const response = await fetch('/api/nlu/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,19 +171,20 @@ export function Inbox() {
         body: JSON.stringify({
           text: userText,
           channel: activeChannel,
-          user_id: activeConversation || 'user_1'
+          user_id: activeConversation || 'user_1',
+          conversation_history: conversationHistory
         })
       })
 
       if (!response.ok) {
-        throw new Error('Backend API error')
+        throw new Error(`Backend API error: ${response.status}`)
       }
 
       const data = await response.json()
       
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response || data.message || 'আমি আপনাকে সাহায্য করতে পারছি না। দয়া করে আবার চেষ্টা করুন।',
+        text: data.response || 'আমি আপনাকে সাহায্য করতে পারছি না। দয়া করে আবার চেষ্টা করুন।',
         sender: 'bot',
         timestamp: new Date(),
         channel: activeChannel
