@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +13,71 @@ from app.services.dialogue_manager import dialogue_manager
 router = APIRouter()
 
 
+def detect_language(text: str) -> str:
+    """
+    Simple language detection based on character patterns
+    Returns: 'en' for English, 'bn' for Bengali, 'banglish' for mixed, 'other' for others
+    """
+    text = text.lower().strip()
+
+    # Bengali characters (অ-ঌ, এ-ঐ, ও-ঔ, ক-হ, া-ৈ, ড়-ঢ়, য়)
+    bengali_pattern = re.compile(r'[\u0985-\u09B9\u09BE-\u09CC\u09D7\u09DC-\u09E3\u09F0-\u09F1]')
+    bengali_chars = len(bengali_pattern.findall(text))
+
+    # English letters
+    english_pattern = re.compile(r'[a-zA-Z]')
+    english_chars = len(english_pattern.findall(text))
+
+    # Numbers and symbols
+    total_chars = len(re.findall(r'\w', text))
+
+    if total_chars == 0:
+        return 'en'  # Default to English
+
+    # Calculate ratios
+    bengali_ratio = bengali_chars / total_chars
+    english_ratio = english_chars / total_chars
+
+    # Language detection logic
+    if bengali_ratio > 0.3 and english_ratio < 0.3:
+        return 'bn'  # Mostly Bengali
+    elif english_ratio > 0.7 and bengali_ratio < 0.1:
+        return 'en'  # Mostly English
+    elif bengali_ratio > 0.1 and english_ratio > 0.1:
+        return 'banglish'  # Mixed language
+    else:
+        # Check for common Bengali words/phrases
+        bengali_words = ['আমি', 'আপনি', 'কি', 'কেমন', 'কোথায়', 'কখন', 'কত', 'কেন', 'কি', 'এবং', 'অথবা', 'না', 'হ্যাঁ', 'ধন্যবাদ']
+        if any(word in text for word in bengali_words):
+            return 'bn'
+        return 'en'  # Default to English
+
+
+def get_language_instructions(language: str) -> str:
+    """Get language-specific instructions for the AI assistant"""
+    if language == 'bn':
+        return """আপনি একজন সহায়ক AI সহকারী। আপনার প্রতিক্রিয়া বাংলায় হতে হবে এবং সহায়ক, বিনয়ী এবং পেশাদার হতে হবে।
+আপনার উত্তরে:
+- বাংলায় লিখুন
+- সৌজন্যপূর্ণ এবং সহায়ক হোন
+- সংক্ষিপ্ত এবং স্পষ্ট হোন
+- গ্রাহকের প্রশ্নের উত্তর সঠিকভাবে দিন"""
+    elif language == 'banglish':
+        return """You are a helpful AI assistant. Respond in Banglish (mixed Bengali-English) and be helpful, friendly, and professional.
+Your responses should:
+- Use Banglish (mix of Bengali and English)
+- Be polite and helpful
+- Be clear and concise
+- Answer customer questions accurately"""
+    else:  # English and other languages
+        return """You are a helpful AI assistant. Respond in English and be helpful, friendly, and professional.
+Your responses should:
+- Be in English
+- Be polite and helpful
+- Be clear and concise
+- Answer customer questions accurately"""
+
+
 class TestAgentRequest(BaseModel):
     message: str
     context: Optional[Dict[str, Any]] = {}
@@ -20,6 +86,7 @@ class TestAgentRequest(BaseModel):
 
 class TestAgentResponse(BaseModel):
     response: str
+    detected_language: str
     intent: Optional[str] = None
     entities: Optional[Dict[str, Any]] = {}
     confidence: Optional[float] = None
@@ -68,20 +135,44 @@ async def test_agent_for_tenant(
         if not client:
             raise HTTPException(status_code=404, detail="Tenant not found")
 
-        # For now, use a simple OpenAI completion
-        # In the future, this could use tenant-specific models/training data
+        # Detect language from user's message (ignore the request.language field)
+        detected_language = detect_language(request.message)
 
-        system_prompt = f"""You are a helpful AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
-You should respond in {request.language} language and be helpful, friendly, and professional.
+        # Get language-specific instructions
+        language_instructions = get_language_instructions(detected_language)
+
+        # Create dynamic system prompt based on detected language
+        if detected_language == 'bn':
+            system_prompt = f"""{language_instructions}
+
+আপনি {client.business_name} এর জন্য একজন AI সহকারী, যা বাংলাদেশের একটি {client.business_type} ব্যবসা।
+ব্যবসার বিস্তারিত তথ্য: {client.business_address}, যোগাযোগ: {client.contact_person} ({client.contact_email})
+
+প্রসঙ্গ: {request.context if request.context else 'সাধারণ ব্যবসায়িক অনুসন্ধান'}"""
+        elif detected_language == 'banglish':
+            system_prompt = f"""{language_instructions}
+
+You are an AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
 Business details: {client.business_address}, Contact: {client.contact_person} ({client.contact_email})
+
+Context: {request.context if request.context else 'General business inquiry'}"""
+        else:  # English
+            system_prompt = f"""{language_instructions}
+
+You are an AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
+Business details: {client.business_address}, Contact: {client.contact_person} ({client.contact_email})
+
 Context: {request.context if request.context else 'General business inquiry'}"""
 
         user_message = request.message
 
         # Call OpenAI service
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
         response = await openai_service.generate_response(
-            system_prompt=system_prompt,
-            user_message=user_message,
+            messages=messages,
             max_tokens=500,
             temperature=0.7
         )
@@ -105,11 +196,12 @@ Context: {request.context if request.context else 'General business inquiry'}"""
             intent = 'general_inquiry'
 
         return TestAgentResponse(
-            response=response.get('content', 'Sorry, I could not generate a response.'),
+            response=response if response else ('দুঃখিত, আমি উত্তর তৈরি করতে পারিনি।' if detected_language == 'bn' else 'Sorry, I could not generate a response.'),
+            detected_language=detected_language,
             intent=intent,
             entities=entities,
             confidence=confidence,
-            tokens_used=response.get('usage', {}).get('total_tokens'),
+            tokens_used=None,  # Would need to modify OpenAI service to return usage
             processing_time=0.5  # Placeholder
         )
 

@@ -435,6 +435,13 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
                           </Typography>
 
                           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            {agentResponse.detected_language && (
+                              <Chip
+                                label={`Language: ${agentResponse.detected_language === 'bn' ? 'Bengali' : agentResponse.detected_language === 'en' ? 'English' : agentResponse.detected_language === 'banglish' ? 'Banglish' : agentResponse.detected_language}`}
+                                size="small"
+                                color="info"
+                              />
+                            )}
                             {agentResponse.intent && (
                               <Chip
                                 label={`Intent: ${agentResponse.intent}`}
