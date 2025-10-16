@@ -93,17 +93,17 @@ jobs:
 
             # Create .env file with proper configuration
             echo "⚙️  Configuring environment..."
-            cat > "$VPS_PATH/.env" <<EOF
-BANG_DATABASE_URL=sqlite:///./bangla.db
-BANG_CORS_ORIGINS=["https://bdchatpro.com","https://www.bdchatpro.com","http://localhost:5173"]
-BANG_OPENAI_API_KEY=${OPENAI_API_KEY}
-BANG_OPENAI_MODEL=gpt-4o-mini
-BANG_OPENAI_MAX_TOKENS=1000
-BANG_NLU_MODEL_NAME=sagorsarker/bangla-bert-base
-BANG_SECRET_KEY=$(openssl rand -hex 32)
-BANG_ALGORITHM=HS256
-BANG_ACCESS_TOKEN_EXPIRE_MINUTES=60
-EOF
+            {
+              echo "BANG_DATABASE_URL=sqlite:///./bangla.db"
+              echo "BANG_CORS_ORIGINS=[\"https://bdchatpro.com\",\"https://www.bdchatpro.com\",\"http://localhost:5173\"]"
+              echo "BANG_OPENAI_API_KEY=${OPENAI_API_KEY}"
+              echo "BANG_OPENAI_MODEL=gpt-4o-mini"
+              echo "BANG_OPENAI_MAX_TOKENS=1000"
+              echo "BANG_NLU_MODEL_NAME=sagorsarker/bangla-bert-base"
+              echo "BANG_SECRET_KEY=$(openssl rand -hex 32)"
+              echo "BANG_ALGORITHM=HS256"
+              echo "BANG_ACCESS_TOKEN_EXPIRE_MINUTES=60"
+            } > "$VPS_PATH/.env"
 
             # Setup systemd service
             echo "🔧 Setting up systemd service..."
