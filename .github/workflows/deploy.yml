@@ -53,15 +53,15 @@ jobs:
 
       - name: Remote deploy & restart
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API }}
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s <<'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} bash -s "$OPENAI_API_KEY" <<'ENDSSH'
             set -euo pipefail
 
             DOMAIN="bdchatpro.com"
             WEBROOT="/var/www/bangla"
             VPS_PATH="${{ secrets.VPS_PATH }}"
-            OPENAI_API_KEY="${OPENAI_API_KEY}"
+            OPENAI_API_KEY="$1"
 
             # Install required packages
             sudo apt-get update
