@@ -172,23 +172,37 @@ jobs:
             fi
 
             # Setup Nginx
-            echo "🌐 Configuring Nginx..."
+            echo "🌐 Configuring Nginx for bdchatpro.com..."
             sudo sed -e "s#{{DOMAIN}}#${DOMAIN}#g" -e "s#{{WEBROOT}}#${WEBROOT}#g" \
               "$VPS_PATH/deploy/nginx.bangla.conf" | \
               sudo tee /etc/nginx/sites-available/bangla > /dev/null
             
-            sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/bangla
-            sudo rm -f /etc/nginx/sites-enabled/default || true
+            # Remove old symbolic link if exists
+            sudo rm -f /etc/nginx/sites-enabled/bangla
+            
+            # Create new symbolic link
+            sudo ln -s /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/bangla
+            
+            # Remove default nginx site (this might be conflicting)
+            sudo rm -f /etc/nginx/sites-enabled/default
+            
+            echo "📋 Enabled Nginx sites:"
+            ls -la /etc/nginx/sites-enabled/
             
             # Test nginx config
             if sudo nginx -t; then
               echo "✅ Nginx configuration is valid"
               sudo systemctl reload nginx
-              echo "✅ Nginx reloaded"
+              echo "✅ Nginx reloaded successfully"
             else
-              echo "❌ Nginx configuration error"
+              echo "❌ Nginx configuration error - check logs"
+              sudo nginx -t 2>\u00261
               exit 1
             fi
+            
+            # Verify frontend files are in place
+            echo "📂 Frontend files check:"
+            ls -lah "$WEBROOT" | head -10
 
             # Clean up
             rm -rf /tmp/bangla_upload /tmp/bangla_upload_old
