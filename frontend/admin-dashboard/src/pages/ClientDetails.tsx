@@ -22,7 +22,10 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider
+  Divider,
+  Tabs,
+  Tab,
+  CircularProgress
 } from '@mui/material';
 import { Client, ClientUser, adminApi } from '../lib/api';
 
@@ -46,6 +49,12 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Agent testing state
+  const [testMessage, setTestMessage] = useState('');
+  const [agentResponse, setAgentResponse] = useState<any>(null);
+  const [testingAgent, setTestingAgent] = useState(false);
 
   useEffect(() => {
     loadClientUsers();
@@ -96,6 +105,44 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
     }
   };
 
+  const handleTestAgent = async () => {
+    if (!testMessage.trim()) return;
+
+    try {
+      setTestingAgent(true);
+      setAgentResponse(null);
+
+      // Use the client's tenant ID to test the agent
+      const response = await fetch(`http://bdchatpro.com/api/agent/test?tenant_id=${client.tenant_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Note: In production, you'd need proper authentication
+          // For now, this is a demo endpoint
+        },
+        body: JSON.stringify({
+          message: testMessage,
+          context: {
+            client_name: client.business_name,
+            client_type: client.business_type
+          },
+          language: client.language_preference
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setAgentResponse(result);
+      } else {
+        setAgentResponse({ error: 'Failed to test agent', status: response.status });
+      }
+    } catch (error) {
+      setAgentResponse({ error: 'Network error', details: error.message });
+    } finally {
+      setTestingAgent(false);
+    }
+  };
+
   const handleProcessPayment = async (amount: number, paymentType: string) => {
     try {
       setLoading(true);
@@ -131,14 +178,23 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {/* Client Info */}
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h5">
-                {editing ? 'Edit Client' : client.business_name}
-              </Typography>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+          <Tab label="Client Info" />
+          <Tab label="Users" />
+          <Tab label="Agent Testing" />
+        </Tabs>
+      </Box>
+
+      {activeTab === 0 && (
+        <Grid container spacing={3}>
+          {/* Client Info */}
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">
+                  {editing ? 'Edit Client' : client.business_name}
+                </Typography>
               <Box>
                 {!editing ? (
                   <Button variant="outlined" onClick={() => setEditing(true)}>
@@ -238,8 +294,10 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
           </Paper>
         </Grid>
 
-        {/* Stats & Actions */}
-        <Grid item xs={12} md={4}>
+          </Grid>
+
+          {/* Stats & Actions */}
+          <Grid item xs={12} md={4}>
           <Card sx={{ mb: 2 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -292,34 +350,144 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
               </Box>
             </CardContent>
           </Card>
+          </Grid>
         </Grid>
+      )}
 
-        {/* Users */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                Users ({users.length})
-              </Typography>
-              <Button variant="outlined" onClick={() => setShowCreateUser(true)}>
-                Add User
-              </Button>
-            </Box>
-            <List>
-              {users.map((user, index) => (
-                <React.Fragment key={user.id}>
-                  <ListItem>
-                    <ListItemText
-                      primary={`${user.full_name || user.username} (${user.email})`}
-                      secondary={`Role: ${user.role} | Status: ${user.is_active ? 'Active' : 'Inactive'} | Last Login: ${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}`}
-                    />
-                  </ListItem>
-                  {index < users.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
-            </List>
-          </Paper>
+      {activeTab === 1 && (
+        <Grid container spacing={3}>
+          {/* Users */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Users ({users.length})
+                </Typography>
+                <Button variant="outlined" onClick={() => setShowCreateUser(true)}>
+                  Add User
+                </Button>
+              </Box>
+              <List>
+                {users.map((user, index) => (
+                  <React.Fragment key={user.id}>
+                    <ListItem>
+                      <ListItemText
+                        primary={`${user.full_name || user.username} (${user.email})`}
+                        secondary={`Role: ${user.role} | Status: ${user.is_active ? 'Active' : 'Inactive'} | Last Login: ${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}`}
+                      />
+                    </ListItem>
+                    {index < users.length - 1 && <Divider />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
         </Grid>
+      )}
+
+      {activeTab === 2 && (
+        <Grid container spacing={3}>
+          {/* Agent Testing */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                AI Agent Testing for {client.business_name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Test your AI agent's responses. This is free for all clients to ensure their agents work correctly.
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Test Message"
+                    multiline
+                    rows={3}
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    placeholder="Enter a customer message to test your AI agent..."
+                    sx={{ mb: 2 }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handleTestAgent}
+                    disabled={testingAgent || !testMessage.trim()}
+                    startIcon={testingAgent ? <CircularProgress size={20} /> : null}
+                  >
+                    {testingAgent ? 'Testing...' : 'Test Agent'}
+                  </Button>
+                </Grid>
+
+                {agentResponse && (
+                  <Grid item xs={12}>
+                    <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+                      <Typography variant="h6" gutterBottom>
+                        Agent Response
+                      </Typography>
+
+                      {agentResponse.error ? (
+                        <Alert severity="error">
+                          {agentResponse.error}
+                          {agentResponse.details && <><br />Details: {agentResponse.details}</>}
+                        </Alert>
+                      ) : (
+                        <Box>
+                          <Typography variant="body1" sx={{ mb: 2 }}>
+                            {agentResponse.response}
+                          </Typography>
+
+                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            {agentResponse.intent && (
+                              <Chip
+                                label={`Intent: ${agentResponse.intent}`}
+                                size="small"
+                                color="primary"
+                              />
+                            )}
+                            {agentResponse.confidence && (
+                              <Chip
+                                label={`Confidence: ${(agentResponse.confidence * 100).toFixed(1)}%`}
+                                size="small"
+                                color="secondary"
+                              />
+                            )}
+                            {agentResponse.tokens_used && (
+                              <Chip
+                                label={`Tokens: ${agentResponse.tokens_used}`}
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+
+                          {agentResponse.entities && Object.keys(agentResponse.entities).length > 0 && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="subtitle2" gutterBottom>
+                                Extracted Entities:
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                {Object.entries(agentResponse.entities).map(([key, value]) => (
+                                  <Chip
+                                    key={key}
+                                    label={`${key}: ${value}`}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                    </Paper>
+                  </Grid>
+                )}
+              </Grid>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
       </Grid>
 
       {/* Create User Dialog */}
