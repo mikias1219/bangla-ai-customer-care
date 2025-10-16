@@ -38,10 +38,27 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
             set -e
+            echo "🔄 Waiting for any existing apt processes to finish..."
+            # Wait for apt locks to be released (timeout after 5 minutes)
+            timeout=300
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              echo "Waiting for apt lock to be released..."
+              sleep 5
+              timeout=$((timeout - 5))
+              if [ $timeout -le 0 ]; then
+                echo "⚠️ Timeout waiting for apt lock, attempting to kill blocking processes..."
+                sudo killall -9 apt apt-get dpkg 2>/dev/null || true
+                sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true
+                break
+              fi
+            done
+
             echo "🔄 Updating system packages..."
-            sudo apt update && sudo apt upgrade -y
+            sudo apt update
+            sudo apt upgrade -y --no-install-recommends
+
             echo "📦 Installing required packages..."
-            sudo apt install -y nginx python3 python3-pip python3-venv nodejs npm snapd curl
+            sudo apt install -y --no-install-recommends nginx python3 python3-pip python3-venv nodejs npm snapd curl
             echo "✅ System update and package installation completed"
           EOF
 
