@@ -36,23 +36,29 @@ jobs:
 
       - name: Prepare Server for Deployment
         run: |
-          echo "🧹 Running server cleanup and dpkg fix..."
+          echo "🧹 Running server cleanup and fixes..."
           scp -o StrictHostKeyChecking=no deploy/cleanup-server.sh $SSH_USER@$SSH_HOST:/tmp/
           scp -o StrictHostKeyChecking=no deploy/fix-dpkg.sh $SSH_USER@$SSH_HOST:/tmp/
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "chmod +x /tmp/cleanup-server.sh /tmp/fix-dpkg.sh && sudo /tmp/fix-dpkg.sh && sudo /tmp/cleanup-server.sh"
+          scp -o StrictHostKeyChecking=no deploy/fix-nodejs.sh $SSH_USER@$SSH_HOST:/tmp/
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "chmod +x /tmp/cleanup-server.sh /tmp/fix-dpkg.sh /tmp/fix-nodejs.sh && sudo /tmp/fix-dpkg.sh && sudo /tmp/fix-nodejs.sh && sudo /tmp/cleanup-server.sh"
 
       - name: System Update and Package Installation
         run: |
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
             set -e
-            echo "🔧 Fixing any interrupted dpkg configurations..."
-            sudo dpkg --configure -a
-
             echo "🔄 Updating system packages..."
             sudo apt update && sudo apt upgrade -y
 
             echo "📦 Installing required packages..."
-            sudo apt install -y nginx python3 python3-pip python3-venv nodejs npm curl
+            sudo apt install -y nginx python3 python3-pip python3-venv curl
+
+            echo "🔍 Verifying installations..."
+            node --version && echo "✅ Node.js: $(node --version)"
+            npm --version && echo "✅ npm: $(npm --version)"
+            python3 --version && echo "✅ Python: $(python3 --version)"
+            pip3 --version && echo "✅ pip: $(pip3 --version)"
+            nginx -v && echo "✅ Nginx installed"
+
             echo "✅ System update and package installation completed"
           EOF
 
