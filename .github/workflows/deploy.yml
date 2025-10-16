@@ -44,7 +44,7 @@ jobs:
 
       - name: System Update and Package Installation
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🔄 Updating system packages..."
             sudo apt update && sudo apt upgrade -y
@@ -53,10 +53,10 @@ jobs:
             sudo apt install -y nginx python3 python3-pip python3-venv curl
 
             echo "🔍 Verifying installations..."
-            node --version && echo "✅ Node.js: $(node --version)"
-            npm --version && echo "✅ npm: $(npm --version)"
-            python3 --version && echo "✅ Python: $(python3 --version)"
-            pip3 --version && echo "✅ pip: $(pip3 --version)"
+            node --version && echo "✅ Node.js: \$(node --version)"
+            npm --version && echo "✅ npm: \$(npm --version)"
+            python3 --version && echo "✅ Python: \$(python3 --version)"
+            pip3 --version && echo "✅ pip: \$(pip3 --version)"
             nginx -v && echo "✅ Nginx installed"
 
             echo "✅ System update and package installation completed"
@@ -64,27 +64,35 @@ jobs:
 
       - name: Setup SSL Certificates
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🔒 Installing Certbot for SSL certificates..."
             sudo apt install -y certbot python3-certbot-nginx
+
+            # Check if SSL email is provided
+            if [ -z "\$SSL_EMAIL" ] || [ "\$SSL_EMAIL" = "" ]; then
+              echo "⚠️  SSL_EMAIL not provided, skipping SSL certificate setup"
+              echo "   You can manually run: sudo certbot --nginx -d $DOMAIN -d www.\$DOMAIN"
+              exit 0
+            fi
+
             echo "📜 Obtaining SSL certificate for $DOMAIN..."
             sudo certbot certonly --standalone \
               --non-interactive \
               --agree-tos \
-              --email $SSL_EMAIL \
-              -d $DOMAIN \
-              -d www.$DOMAIN
+              --email "\$SSL_EMAIL" \
+              -d "$DOMAIN" \
+              -d "www.$DOMAIN"
             echo "✅ SSL certificates setup completed"
           EOF
 
       - name: Create Project Directory and Setup
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "📁 Creating project directory..."
             sudo mkdir -p /opt/bangla-ai-customer-care
-            sudo chown $USER:$USER /opt/bangla-ai-customer-care
+            sudo chown \$USER:\$USER /opt/bangla-ai-customer-care
             echo "🛑 Stopping existing services..."
             sudo systemctl stop bangla-frontend 2>/dev/null || true
             sudo systemctl stop bangla-backend 2>/dev/null || true
@@ -93,12 +101,12 @@ jobs:
 
       - name: Deploy Backend
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🔧 Setting up backend..."
             cd /opt/bangla-ai-customer-care
             echo "📋 Copying backend files..."
-            cp -r $GITHUB_WORKSPACE/backend .
+            cp -r \$GITHUB_WORKSPACE/backend .
             echo "🐍 Installing backend dependencies..."
             python3 -m venv venv
             source venv/bin/activate
@@ -106,9 +114,9 @@ jobs:
             pip install fastapi uvicorn sqlalchemy alembic redis httpx aiohttp requests python-jose passlib python-multipart prometheus-client openai python-dateutil pytz fuzzywuzzy python-levenshtein numpy
             echo "⚙️ Creating environment configuration..."
             cat > .env << ENV_EOF
-            BANG_OPENAI_API_KEY=${{ secrets.OPENAI_API }}
+            BANG_OPENAI_API_KEY=$OPENAI_API_KEY
             BANG_DATABASE_URL=sqlite:///./bangla.db
-            BANG_SECRET_KEY=$(openssl rand -hex 32)
+            BANG_SECRET_KEY=\$(openssl rand -hex 32)
             BANG_CORS_ORIGINS=["https://$DOMAIN", "http://localhost:3000"]
             BANG_REDIS_URL=redis://localhost:6379/0
             ENV_EOF
@@ -117,12 +125,12 @@ jobs:
 
       - name: Deploy Frontend
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🎨 Setting up frontend..."
             cd /opt/bangla-ai-customer-care
             echo "📋 Copying frontend files..."
-            cp -r $GITHUB_WORKSPACE/frontend .
+            cp -r \$GITHUB_WORKSPACE/frontend .
             echo "📦 Installing Node.js dependencies..."
             cd frontend
             npm install
@@ -140,18 +148,15 @@ jobs:
 
       - name: Configure Nginx
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "⚙️ Configuring Nginx..."
-            sudo tee /etc/nginx/sites-available/bangla > /dev/null << NGINX_EOF
-            server {
-                listen 80;
-                listen [::]:80;
-                server_name $DOMAIN www.$DOMAIN;
-                return 301 https://\$server_name\$request_uri;
-            }
 
-            server {
+            # Check if SSL certificates exist
+            if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+              echo "🔒 SSL certificates found, configuring HTTPS and HTTP with redirect..."
+              REDIRECT="return 301 https://\$server_name\$request_uri;"
+              SSL_SERVER="server {
                 listen 443 ssl http2;
                 listen [::]:443 ssl http2;
                 server_name $DOMAIN www.$DOMAIN;
@@ -207,7 +212,68 @@ jobs:
                 gzip_vary on;
                 gzip_min_length 1024;
                 gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
+            }"
+            else
+              echo "⚠️  SSL certificates not found, configuring HTTP only..."
+              echo "   Run: sudo certbot --nginx -d $DOMAIN -d www.\$DOMAIN"
+              REDIRECT="# HTTP only - no SSL redirect"
+              SSL_SERVER=""
+            fi
+
+            sudo tee /etc/nginx/sites-available/bangla > /dev/null << NGINX_EOF
+            server {
+                listen 80;
+                listen [::]:80;
+                server_name $DOMAIN www.$DOMAIN;
+
+                \$REDIRECT
+
+                location / {
+                    proxy_pass http://127.0.0.1:$FRONTEND_PORT;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_cache_bypass \$http_upgrade;
+                    proxy_buffering off;
+                    proxy_request_buffering off;
+                }
+
+                location /api/ {
+                    proxy_pass http://127.0.0.1:$BACKEND_PORT/;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                }
+
+                location /channels/ {
+                    proxy_pass http://127.0.0.1:$BACKEND_PORT/channels/;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                }
+
+                location /health {
+                    proxy_pass http://127.0.0.1:$BACKEND_PORT/health;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                }
+
+                gzip on;
+                gzip_vary on;
+                gzip_min_length 1024;
+                gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
             }
+
+            \$SSL_SERVER
             NGINX_EOF
 
             sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/
@@ -218,7 +284,7 @@ jobs:
 
       - name: Setup Systemd Services
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "🔄 Setting up systemd services..."
 
@@ -229,7 +295,7 @@ jobs:
 
             [Service]
             Type=simple
-            User=$USER
+            User=\$USER
             WorkingDirectory=/opt/bangla-ai-customer-care/frontend
             ExecStart=/usr/bin/node server.js
             Restart=always
@@ -247,7 +313,7 @@ jobs:
 
             [Service]
             Type=simple
-            User=$USER
+            User=\$USER
             WorkingDirectory=/opt/bangla-ai-customer-care/backend
             Environment="PATH=/opt/bangla-ai-customer-care/backend/venv/bin"
             ExecStart=/opt/bangla-ai-customer-care/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT
@@ -266,7 +332,7 @@ jobs:
 
       - name: Start Services and Test Deployment
         run: |
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "▶️ Starting services..."
             sudo systemctl start bangla-frontend
@@ -280,11 +346,24 @@ jobs:
             sudo systemctl status bangla-backend --no-pager -l || echo "❌ Backend status check failed"
 
             echo "🌐 Testing endpoints..."
-            curl -k https://$DOMAIN/health && echo "✅ Health check passed" || echo "❌ Health check failed"
-            curl -I https://$DOMAIN | head -1 && echo "✅ HTTPS working" || echo "❌ HTTPS failed"
+            if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+              # Test HTTPS
+              curl -k https://$DOMAIN/health 2>/dev/null && echo "✅ HTTPS health check passed" || echo "❌ HTTPS health check failed"
+              curl -I https://$DOMAIN 2>/dev/null | head -1 && echo "✅ HTTPS working" || echo "❌ HTTPS failed"
+            else
+              # Test HTTP
+              curl http://$DOMAIN/health 2>/dev/null && echo "✅ HTTP health check passed" || echo "❌ HTTP health check failed"
+              curl -I http://$DOMAIN 2>/dev/null | head -1 && echo "✅ HTTP working" || echo "❌ HTTP failed"
+              echo "⚠️  SSL not configured - configure manually: sudo certbot --nginx -d $DOMAIN -d www.\$DOMAIN"
+            fi
 
             echo "✅ Deployment completed successfully!"
-            echo "🌐 Frontend: https://$DOMAIN (port $FRONTEND_PORT)"
+            if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+              echo "🌐 Frontend: https://$DOMAIN (port $FRONTEND_PORT)"
+              echo "🔒 SSL: Let's Encrypt certificate active"
+            else
+              echo "🌐 Frontend: http://$DOMAIN (port $FRONTEND_PORT)"
+              echo "⚠️  SSL: Not configured (HTTP only)"
+            fi
             echo "🔧 Backend: http://localhost:$BACKEND_PORT"
-            echo "🔒 SSL: Let's Encrypt certificate for $DOMAIN"
           EOF
