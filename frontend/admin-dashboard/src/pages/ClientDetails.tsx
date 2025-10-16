@@ -112,19 +112,18 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       setTestingAgent(true);
       setAgentResponse(null);
 
-      // Use the client's tenant ID to test the agent
-      const response = await fetch(`http://bdchatpro.com/api/agent/test?tenant_id=${client.tenant_id}`, {
+      // Use the admin endpoint to test the agent's response
+      const response = await fetch(`http://bdchatpro.com/api/agent/admin/test/${client.tenant_id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Note: In production, you'd need proper authentication
-          // For now, this is a demo endpoint
+          'Authorization': `Bearer ${localStorage.getItem('admin_token') || 'admin_token_2024'}`
         },
         body: JSON.stringify({
           message: testMessage,
           context: {
-            client_name: client.business_name,
-            client_type: client.business_type
+            business_type: client.business_type,
+            client_name: client.business_name
           },
           language: client.language_preference
         })
