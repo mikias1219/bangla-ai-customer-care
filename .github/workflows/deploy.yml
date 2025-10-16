@@ -34,31 +34,20 @@ jobs:
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $SSH_USER@$SSH_HOST "echo 'SSH connection successful'"
 
+      - name: Prepare Server for Deployment
+        run: |
+          echo "🧹 Running server cleanup script..."
+          scp -o StrictHostKeyChecking=no deploy/cleanup-server.sh $SSH_USER@$SSH_HOST:/tmp/
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "chmod +x /tmp/cleanup-server.sh && sudo /tmp/cleanup-server.sh"
+
       - name: System Update and Package Installation
         run: |
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
             set -e
-            echo "🔄 Waiting for any existing apt processes to finish..."
-            # Wait for apt locks to be released (timeout after 5 minutes)
-            timeout=300
-            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-              echo "Waiting for apt lock to be released..."
-              sleep 5
-              timeout=$((timeout - 5))
-              if [ $timeout -le 0 ]; then
-                echo "⚠️ Timeout waiting for apt lock, attempting to kill blocking processes..."
-                sudo killall -9 apt apt-get dpkg 2>/dev/null || true
-                sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true
-                break
-              fi
-            done
-
             echo "🔄 Updating system packages..."
-            sudo apt update
-            sudo apt upgrade -y --no-install-recommends
-
+            sudo apt update && sudo apt upgrade -y
             echo "📦 Installing required packages..."
-            sudo apt install -y --no-install-recommends nginx python3 python3-pip python3-venv nodejs npm snapd curl
+            sudo apt install -y nginx python3 python3-pip python3-venv nodejs npm curl
             echo "✅ System update and package installation completed"
           EOF
 
@@ -67,10 +56,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
             set -e
             echo "🔒 Installing Certbot for SSL certificates..."
-            sudo snap install core
-            sudo snap refresh core
-            sudo snap install --classic certbot
-            sudo ln -sf /snap/bin/certbot /usr/bin/certbot
+            sudo apt install -y certbot python3-certbot-nginx
             echo "📜 Obtaining SSL certificate for $DOMAIN..."
             sudo certbot certonly --standalone \
               --non-interactive \
