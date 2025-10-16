@@ -296,54 +296,24 @@ jobs:
 
             # Determine the correct Node.js path
             if command -v node &> /dev/null; then
-              NODE_BIN=$(which node)
+              NODE_BIN=\$(which node)
             elif [ -x "/usr/bin/node" ]; then
               NODE_BIN="/usr/bin/node"
             else
               echo "❌ Cannot determine Node.js binary path"
               exit 1
             fi
-            echo "📍 Using Node.js binary: $NODE_BIN"
+            echo "📍 Using Node.js binary: \$NODE_BIN"
 
-            sudo tee /etc/systemd/system/bangla-frontend.service > /dev/null << FRONTEND_SERVICE_EOF
-            [Unit]
-            Description=Bangla Frontend (Node.js)
-            After=network.target
+            # Create frontend service file
+            printf '[Unit]\nDescription=Bangla Frontend (Node.js)\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/bangla-ai-customer-care/frontend\nExecStart=%s server.js\nRestart=always\nRestartSec=5\nEnvironment=PORT=%s\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "\$NODE_BIN" "$FRONTEND_PORT" > /tmp/bangla-frontend.service
 
-            [Service]
-            Type=simple
-            User=root
-            WorkingDirectory=/opt/bangla-ai-customer-care/frontend
-            ExecStart=$NODE_BIN server.js
-            Restart=always
-            RestartSec=5
-            Environment=PORT=$FRONTEND_PORT
-            StandardOutput=journal
-            StandardError=journal
+            # Create backend service file
+            printf '[Unit]\nDescription=Bangla Backend (FastAPI)\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/bangla-ai-customer-care/backend\nEnvironment=PATH=/opt/bangla-ai-customer-care/backend/venv/bin\nExecStart=/opt/bangla-ai-customer-care/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port %s\nRestart=always\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "$BACKEND_PORT" > /tmp/bangla-backend.service
 
-            [Install]
-            WantedBy=multi-user.target
-            FRONTEND_SERVICE_EOF
-
-            sudo tee /etc/systemd/system/bangla-backend.service > /dev/null << BACKEND_SERVICE_EOF
-            [Unit]
-            Description=Bangla Backend (FastAPI)
-            After=network.target
-
-            [Service]
-            Type=simple
-            User=root
-            WorkingDirectory=/opt/bangla-ai-customer-care/backend
-            Environment="PATH=/opt/bangla-ai-customer-care/backend/venv/bin"
-            ExecStart=/opt/bangla-ai-customer-care/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT
-            Restart=always
-            RestartSec=5
-            StandardOutput=journal
-            StandardError=journal
-
-            [Install]
-            WantedBy=multi-user.target
-            BACKEND_SERVICE_EOF
+            # Move service files to systemd directory
+            sudo mv /tmp/bangla-frontend.service /etc/systemd/system/
+            sudo mv /tmp/bangla-backend.service /etc/systemd/system/
 
             sudo systemctl daemon-reload
             sudo systemctl enable bangla-frontend
