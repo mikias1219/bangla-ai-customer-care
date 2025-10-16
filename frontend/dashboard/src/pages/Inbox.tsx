@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react'
-import { format } from 'date-fns'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import {
   Box,
@@ -20,6 +19,8 @@ import {
   Card,
   CardContent,
   useTheme,
+  useMediaQuery,
+  Drawer,
   alpha
 } from '@mui/material'
 import {
@@ -31,8 +32,17 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   AccessTime as AccessTimeIcon,
-  Chat as ChatBubbleLeftRightIcon
+  Chat as ChatBubbleLeftRightIcon,
+  Menu as MenuIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material'
+
+// Helper function to format time
+const formatTime = (date: Date) => {
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  return `${hours}:${minutes}`
+}
 
 interface Message {
   id: string
@@ -59,8 +69,12 @@ export function Inbox() {
   const [activeConversation, setActiveConversation] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const isTablet = useMediaQuery(theme.breakpoints.down('lg'))
 
   // Sample conversations
   useEffect(() => {
@@ -204,6 +218,122 @@ export function Inbox() {
     }
   }
 
+  const ConversationsSidebar = () => (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Search */}
+      <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
+        <TextField
+          fullWidth
+          placeholder="Search conversations..."
+          variant="outlined"
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: 'text.secondary' }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 2,
+            }
+          }}
+        />
+      </Box>
+
+      {/* Conversations list */}
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <List dense>
+          {conversations.map((conversation) => (
+            <ListItem key={conversation.id} disablePadding>
+              <ListItemButton
+                selected={activeConversation === conversation.id}
+                onClick={() => {
+                  setActiveConversation(conversation.id)
+                  if (isMobile) setSidebarOpen(false)
+                }}
+                sx={{
+                  py: 2,
+                  px: 2,
+                  '&.Mui-selected': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                    borderRight: `3px solid ${theme.palette.primary.main}`,
+                  },
+                }}
+              >
+                <ListItemAvatar>
+                  <Badge
+                    color="error"
+                    badgeContent={conversation.unreadCount}
+                    invisible={conversation.unreadCount === 0}
+                  >
+                    <Avatar
+                      sx={{
+                        bgcolor: getChannelColor(conversation.channel),
+                        width: 40,
+                        height: 40
+                      }}
+                    >
+                      {conversation.customerName.charAt(0).toUpperCase()}
+                    </Avatar>
+                  </Badge>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {conversation.customerName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {formatTime(conversation.timestamp)}
+                      </Typography>
+                    </Box>
+                  }
+                  secondary={
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          mb: 1
+                        }}
+                      >
+                        {conversation.lastMessage}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          label={conversation.channel}
+                          size="small"
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {conversation.status === 'active' && (
+                            <AccessTimeIcon sx={{ fontSize: 12, color: 'warning.main' }} />
+                          )}
+                          {conversation.status === 'completed' && (
+                            <CheckCircleIcon sx={{ fontSize: 12, color: 'success.main' }} />
+                          )}
+                          {conversation.status === 'escalated' && (
+                            <ErrorIcon sx={{ fontSize: 12, color: 'error.main' }} />
+                          )}
+                        </Box>
+                      </Box>
+                    </Box>
+                  }
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Box>
+  )
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header */}
@@ -211,39 +341,53 @@ export function Inbox() {
         elevation={0}
         sx={{
           borderBottom: `1px solid ${theme.palette.divider}`,
-          px: 3,
+          px: { xs: 2, md: 3 },
           py: 2,
           borderRadius: 0
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'text.primary', mb: 0.5 }}>
-              Inbox
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Manage customer conversations across channels
-            </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {isMobile && !activeConversation && (
+              <IconButton onClick={() => setSidebarOpen(true)}>
+                <MenuIcon />
+              </IconButton>
+            )}
+            {isMobile && activeConversation && (
+              <IconButton onClick={() => setActiveConversation(null)}>
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+            <Box>
+              <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 'bold', color: 'text.primary', mb: 0.5 }}>
+                Inbox
+              </Typography>
+              {!isMobile && (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Manage customer conversations
+                </Typography>
+              )}
+            </Box>
           </Box>
 
           {/* Channel tabs */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {[
-              { id: 'messenger' as const, label: 'Messenger', color: theme.palette.facebook.main },
-              { id: 'whatsapp' as const, label: 'WhatsApp', color: theme.palette.whatsapp.main },
-              { id: 'instagram' as const, label: 'Instagram', color: theme.palette.instagram.main }
-            ].map(({ id, label, color }) => (
+              { id: 'messenger' as const, label: isMobile ? 'FB' : 'Messenger', color: theme.palette.facebook.main, emoji: '💙' },
+              { id: 'whatsapp' as const, label: isMobile ? 'WA' : 'WhatsApp', color: theme.palette.whatsapp.main, emoji: '💚' },
+              { id: 'instagram' as const, label: isMobile ? 'IG' : 'Instagram', color: theme.palette.instagram.main, emoji: '💜' }
+            ].map(({ id, label, color, emoji }) => (
               <Button
                 key={id}
                 onClick={() => setActiveChannel(id)}
                 variant={activeChannel === id ? 'contained' : 'outlined'}
-                startIcon={<Box sx={{ fontSize: '1.2rem' }}>
-                  {id === 'messenger' ? '💙' : id === 'whatsapp' ? '💚' : '💜'}
-                </Box>}
+                startIcon={!isMobile && <Box sx={{ fontSize: '1.2rem' }}>{emoji}</Box>}
+                size={isMobile ? 'small' : 'medium'}
                 sx={{
                   borderRadius: 2,
                   textTransform: 'none',
                   fontWeight: 500,
+                  minWidth: isMobile ? 50 : 120,
                   ...(activeChannel === id && {
                     backgroundColor: color,
                     '&:hover': { backgroundColor: alpha(color, 0.8) }
@@ -259,129 +403,46 @@ export function Inbox() {
 
       {/* Main content */}
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Conversations sidebar */}
-        <Paper
-          elevation={0}
-          sx={{
-            width: 320,
-            borderRight: `1px solid ${theme.palette.divider}`,
-            borderRadius: 0,
-            display: 'flex',
-            flexDirection: 'column'
-          }}
-        >
-          {/* Search */}
-          <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
-            <TextField
-              fullWidth
-              placeholder="Search conversations..."
-              variant="outlined"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                }
-              }}
-            />
-          </Box>
+        {/* Conversations sidebar - Desktop */}
+        {!isMobile && (
+          <Paper
+            elevation={0}
+            sx={{
+              width: 320,
+              borderRight: `1px solid ${theme.palette.divider}`,
+              borderRadius: 0,
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <ConversationsSidebar />
+          </Paper>
+        )}
 
-          {/* Conversations list */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
-            <List dense>
-              {conversations.map((conversation) => (
-                <ListItem key={conversation.id} disablePadding>
-                  <ListItemButton
-                    selected={activeConversation === conversation.id}
-                    onClick={() => setActiveConversation(conversation.id)}
-                    sx={{
-                      py: 2,
-                      px: 2,
-                      '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        borderRight: `3px solid ${theme.palette.primary.main}`,
-                      },
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Badge
-                        color="error"
-                        badgeContent={conversation.unreadCount}
-                        invisible={conversation.unreadCount === 0}
-                      >
-                        <Avatar
-                          sx={{
-                            bgcolor: getChannelColor(conversation.channel),
-                            width: 40,
-                            height: 40
-                          }}
-                        >
-                          {conversation.customerName.charAt(0).toUpperCase()}
-                        </Avatar>
-                      </Badge>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                            {conversation.customerName}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {format(conversation.timestamp, 'HH:mm')}
-                          </Typography>
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              color: 'text.secondary',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              mb: 1
-                            }}
-                          >
-                            {conversation.lastMessage}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Chip
-                              label={conversation.channel}
-                              size="small"
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.7rem' }}
-                            />
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              {conversation.status === 'active' && (
-                                <AccessTimeIcon sx={{ fontSize: 12, color: 'warning.main' }} />
-                              )}
-                              {conversation.status === 'completed' && (
-                                <CheckCircleIcon sx={{ fontSize: 12, color: 'success.main' }} />
-                              )}
-                              {conversation.status === 'escalated' && (
-                                <ErrorIcon sx={{ fontSize: 12, color: 'error.main' }} />
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        </Paper>
+        {/* Conversations sidebar - Mobile Drawer */}
+        {isMobile && (
+          <Drawer
+            anchor="left"
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: 280,
+                boxSizing: 'border-box',
+              },
+            }}
+          >
+            <ConversationsSidebar />
+          </Drawer>
+        )}
 
         {/* Chat area */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+        <Box sx={{ 
+          flex: 1, 
+          display: (!isMobile || activeConversation) ? 'flex' : 'none', 
+          flexDirection: 'column', 
+          bgcolor: 'background.paper' 
+        }}>
           {activeConversation ? (
             <>
               {/* Chat header */}
@@ -427,13 +488,21 @@ export function Inbox() {
                   </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <IconButton size="small" sx={{ color: 'text.secondary' }}>
-                    <PhoneIcon />
-                  </IconButton>
-                  <IconButton size="small" sx={{ color: 'text.secondary' }}>
-                    <VideocamIcon />
-                  </IconButton>
-                  <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                  {!isMobile && (
+                    <>
+                      <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                        <PhoneIcon />
+                      </IconButton>
+                      <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                        <VideocamIcon />
+                      </IconButton>
+                    </>
+                  )}
+                  <IconButton 
+                    size="small" 
+                    sx={{ color: 'text.secondary' }}
+                    onClick={() => setInfoOpen(true)}
+                  >
                     <InfoIcon />
                   </IconButton>
                 </Box>
@@ -486,7 +555,7 @@ export function Inbox() {
                           color: message.sender === 'user' ? 'primary.light' : 'text.secondary',
                         }}
                       >
-                        {format(message.timestamp, 'HH:mm')}
+                        {formatTime(message.timestamp)}
                       </Typography>
                     </Box>
                   </Box>
@@ -588,18 +657,19 @@ export function Inbox() {
           )}
         </Box>
 
-        {/* Customer info sidebar */}
-        <Paper
-          elevation={0}
-          sx={{
-            width: 320,
-            borderLeft: `1px solid ${theme.palette.divider}`,
-            borderRadius: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          {activeConversation ? (
+        {/* Customer info sidebar - Desktop */}
+        {!isMobile && !isTablet && (
+          <Paper
+            elevation={0}
+            sx={{
+              width: 320,
+              borderLeft: `1px solid ${theme.palette.divider}`,
+              borderRadius: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {activeConversation ? (
             <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
               <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Avatar
@@ -695,7 +765,119 @@ export function Inbox() {
               </Box>
             </Box>
           )}
-        </Paper>
+          </Paper>
+        )}
+
+        {/* Customer info sidebar - Mobile/Tablet Drawer */}
+        {(isMobile || isTablet) && (
+          <Drawer
+            anchor="right"
+            open={infoOpen}
+            onClose={() => setInfoOpen(false)}
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: { xs: '100%', sm: 360 },
+                boxSizing: 'border-box',
+              },
+            }}
+          >
+            {activeConversation && (
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Customer Info</Typography>
+                  <IconButton onClick={() => setInfoOpen(false)}>
+                    <ArrowBackIcon />
+                  </IconButton>
+                </Box>
+                <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
+                  <Box sx={{ textAlign: 'center', mb: 4 }}>
+                    <Avatar
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        bgcolor: getChannelColor(activeChannel),
+                        mx: 'auto',
+                        mb: 2,
+                        fontSize: 24,
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      J
+                    </Avatar>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                      John Doe
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Customer ID: #12345
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
+                          Contact Info
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Phone:</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>+880 1234-567890</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Email:</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>john@example.com</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>Channel:</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500, textTransform: 'capitalize' }}>
+                              {activeChannel}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+
+                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
+                          Recent Orders
+                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="body2">Order #123</Typography>
+                          <Chip
+                            label="Processing"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              bgcolor: 'warning.light',
+                              color: 'warning.dark',
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          iPhone 15 Pro • $999 • 2 days ago
+                        </Typography>
+                      </CardContent>
+                    </Card>
+
+                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 2 }}>
+                          Conversation Summary
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
+                          Customer is inquiring about order status and delivery timeline.
+                          Previous interaction was about product pricing.
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Drawer>
+        )}
       </Box>
     </Box>
   )
