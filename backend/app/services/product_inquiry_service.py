@@ -443,6 +443,36 @@ class ProductInquiryService:
             and_(Product.is_active == True, Product.is_featured == True)
         ).limit(limit).all()
 
+    async def search_products(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for products and return them as dictionaries (for API use)
+        """
+        products = self._search_products(query, limit)
+        
+        if not products:
+            # Try fuzzy matching
+            products = self._find_products(query, limit)
+        
+        # Convert to dict format
+        result = []
+        for product in products:
+            result.append({
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "sku": product.sku,
+                "price": product.price,
+                "currency": product.currency,
+                "category": product.category,
+                "brand": product.brand,
+                "stock": product.stock_quantity,
+                "is_active": product.is_active,
+                "is_featured": product.is_featured,
+                "tags": product.tags
+            })
+        
+        return result
+
 
 # Singleton instance
 product_inquiry_service = ProductInquiryService()

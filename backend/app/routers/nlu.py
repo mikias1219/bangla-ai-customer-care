@@ -71,13 +71,24 @@ async def chat(req: ChatRequest) -> ChatResponse:
             conversation_context = req.conversation_history[-5:]  # Last 5 messages
         
         # Step 3: Check if this is a product inquiry and fetch real data
-        product_info = None
-        if intent in ["product_inquiry", "price_inquiry", "availability_inquiry"]:
-            product_name = entities.get("product_name")
-            if product_name:
-                products = await product_inquiry_service.search_products(product_name)
-                if products:
-                    product_info = products[0]  # Get the first matching product
+        products_data = []
+        # Always search for products if the query mentions product-related keywords
+        product_keywords = ['product', 'price', 'দাম', 'cost', 'buy', 'কিনতে', 'available', 'stock', 
+                           'iphone', 'samsung', 'phone', 'laptop', 'watch', 'airpods', 'ফোন']
+        
+        if any(keyword in req.text.lower() for keyword in product_keywords):
+            # Search for products in the user's query
+            products_data = await product_inquiry_service.search_products(req.text)
+            
+            # If no products found but it's a product intent, get featured products
+            if not products_data and intent in ["product_inquiry", "price_inquiry", "availability_inquiry", "recommendation"]:
+                # Get featured products as suggestions
+                featured = product_inquiry_service.get_featured_products(limit=5)
+                products_data = [{
+                    "id": p.id, "name": p.name, "description": p.description,
+                    "price": p.price, "currency": p.currency, "category": p.category,
+                    "brand": p.brand, "stock": p.stock_quantity, "is_featured": p.is_featured
+                } for p in featured]
         
         # Step 4: Build system prompt for GPT
         system_prompt = f"""You are a helpful AI customer service agent for an e-commerce platform.
@@ -91,20 +102,39 @@ Current conversation context:
 
 Guidelines:
 - Be friendly, helpful, and professional
-- Keep responses concise (2-3 sentences max)
+- Use emojis to make responses more engaging (💰 for price, 📦 for stock, ✅ for available, ❌ for out of stock)
+- When showing products, format nicely with product name, price, and stock status
+- If customer asks "which products do you have", list the available products from the database
+- Keep responses natural and conversational, not too formal
 - If you detect an order-related question, ask for the order number if not provided
-- If you detect a product inquiry, provide details about the product
 - If you don't have specific information, politely say so and offer to help differently
 - Use the customer's language naturally"""
 
-        if product_info:
+        if products_data:
             system_prompt += f"""
 
-Product information found:
-- Name: {product_info.get('name')}
-- Price: ${product_info.get('price', 'N/A')}
-- Description: {product_info.get('description', 'No description available')}
-- Stock: {"Available" if product_info.get('stock', 0) > 0 else "Out of stock"}"""
+IMPORTANT: Here are the products from our database that match the customer's query:
+
+"""
+            for idx, product in enumerate(products_data, 1):
+                stock_status = "✅ In Stock" if product.get('stock', 0) > 0 else "❌ Out of Stock"
+                system_prompt += f"""
+Product {idx}:
+- Name: {product.get('name')}
+- Price: {product.get('currency', 'BDT')} {product.get('price', 0):,.2f}
+- Description: {product.get('description', 'No description')}
+- Category: {product.get('category', 'N/A')}
+- Brand: {product.get('brand', 'N/A')}
+- Stock Status: {stock_status} ({product.get('stock', 0)} units)
+- SKU: {product.get('sku', 'N/A')}
+"""
+            
+            system_prompt += f"""
+
+Please answer the customer's question using ONLY the product information above from our database.
+If they ask about products we have, list these products.
+If they ask about a specific product (like iPhone or Samsung), provide its exact details from above.
+Do NOT make up prices or products - use only what's provided above."""
         
         # Step 5: Generate response using GPT
         messages = [
@@ -122,7 +152,7 @@ Product information found:
         gpt_response = await openai_service.generate_response(
             messages=messages,
             temperature=0.7,
-            max_tokens=150
+            max_tokens=300  # Increased for product listings
         )
         
         return ChatResponse(
@@ -133,7 +163,8 @@ Product information found:
             metadata={
                 "channel": req.channel,
                 "user_id": req.user_id,
-                "product_found": product_info is not None,
+                "products_found": len(products_data),
+                "products": [p.get('name') for p in products_data] if products_data else [],
                 "model": "gpt-4o-mini"
             }
         )
