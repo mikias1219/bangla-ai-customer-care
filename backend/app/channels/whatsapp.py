@@ -77,25 +77,95 @@ class WhatsAppAdapter:
     
     async def process_message(self, message_data: Dict[str, Any]) -> str:
         """Process incoming message through NLU and DM"""
+        from app.db.base import get_db
+        from app.db.models import Conversation, Turn, ConversationStatus, TurnSpeaker
+        from sqlalchemy.orm import Session
+        import uuid
+
         text = message_data.get("text", "")
         customer_id = message_data.get("from", "unknown")
 
-        # NLU resolution
-        nlu_result = nlu_service.resolve(text)
+        # NLU resolution with language detection
+        nlu_result = await nlu_service.resolve(text)
+        detected_language = nlu_result.get("language", "bn")
 
-        # Dialogue decision with enhanced context
-        dm_result = dialogue_manager.decide(
-            intent=nlu_result["intent"],
-            entities=nlu_result["entities"],
-            context={
-                "channel": "whatsapp",
-                "customer_id": customer_id,
-                "message": text,
-                "from": message_data.get("from")
-            }
-        )
+        # Get database session
+        db = next(get_db())
 
-        return dm_result["response_text_bn"]
+        try:
+            # Find or create conversation
+            conversation = db.query(Conversation).filter(
+                Conversation.customer_id == customer_id,
+                Conversation.channel == "whatsapp",
+                Conversation.status == ConversationStatus.active
+            ).first()
+
+            if not conversation:
+                conversation_id = str(uuid.uuid4())[:8]
+                conversation = Conversation(
+                    conversation_id=conversation_id,
+                    channel="whatsapp",
+                    customer_id=customer_id,
+                    customer_language=detected_language,
+                    status=ConversationStatus.active
+                )
+                db.add(conversation)
+                db.commit()
+                db.refresh(conversation)
+
+            # Create user turn
+            turn_index = len(conversation.turns) if conversation.turns else 0
+            user_turn = Turn(
+                conversation_id=conversation.id,
+                turn_index=turn_index,
+                speaker=TurnSpeaker.user,
+                text=text,
+                text_language=detected_language,
+                intent=nlu_result["intent"],
+                entities=nlu_result["entities"],
+                nlu_confidence=nlu_result["confidence"]
+            )
+            db.add(user_turn)
+
+            # Dialogue decision with enhanced context
+            dm_result = dialogue_manager.decide(
+                intent=nlu_result["intent"],
+                entities=nlu_result["entities"],
+                context={
+                    "channel": "whatsapp",
+                    "customer_id": customer_id,
+                    "message": text,
+                    "language": detected_language,
+                    "from": message_data.get("from")
+                }
+            )
+
+            # Create bot turn
+            bot_turn = Turn(
+                conversation_id=conversation.id,
+                turn_index=turn_index + 1,
+                speaker=TurnSpeaker.bot,
+                text=dm_result["response_text"],
+                text_language=detected_language,
+                intent=nlu_result["intent"],
+                entities=nlu_result["entities"],
+                turn_data={"action": dm_result["action"], "metadata": dm_result["metadata"]}
+            )
+            db.add(bot_turn)
+
+            # Update conversation
+            conversation.last_message_at = user_turn.timestamp
+            conversation.unread_count += 1
+            db.commit()
+
+            return dm_result["response_text"]
+
+        except Exception as e:
+            print(f"Error processing WhatsApp message: {e}")
+            db.rollback()
+            return "দুঃখিত, একটি ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+        finally:
+            db.close()
 
 
 # Webhook endpoints

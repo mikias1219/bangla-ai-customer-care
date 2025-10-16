@@ -107,33 +107,113 @@ def _extract_events(body: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 @router.post("/webhook")
 async def webhook_receive(request: Request, x_hub_signature_256: Optional[str] = Header(default=None)):
+    from app.db.base import get_db
+    from app.db.models import Conversation, Turn, ConversationStatus, TurnSpeaker
+    import uuid
+
     raw = await request.body()
     if not verify_signature(x_hub_signature_256, raw):
         raise HTTPException(status_code=403, detail="Invalid signature")
     body = await request.json()
 
     events = _extract_events(body)
+    processed_count = 0
+
     for evt in events:
         text = evt.get("text", "")
         platform = evt.get("platform")
         user_id = evt.get("from")
 
-        nlu_res = nlu_service.resolve(text)
-        dm_res = dialogue_manager.decide(
-            intent=nlu_res["intent"],
-            entities=nlu_res["entities"],
-            context={
-                "channel": platform,
-                "customer_id": user_id,
-                "message": text,
-                "from": user_id
-            }
-        )
-        reply = dm_res["response_text_bn"]
+        if not text or not user_id:
+            continue
 
+        # NLU resolution with language detection
+        nlu_res = await nlu_service.resolve(text)
+        detected_language = nlu_res.get("language", "bn")
+
+        # Get database session
+        db = next(get_db())
+
+        try:
+            # Find or create conversation
+            conversation = db.query(Conversation).filter(
+                Conversation.customer_id == user_id,
+                Conversation.channel == platform,
+                Conversation.status == ConversationStatus.active
+            ).first()
+
+            if not conversation:
+                conversation_id = str(uuid.uuid4())[:8]
+                conversation = Conversation(
+                    conversation_id=conversation_id,
+                    channel=platform,
+                    customer_id=user_id,
+                    customer_language=detected_language,
+                    status=ConversationStatus.active
+                )
+                db.add(conversation)
+                db.commit()
+                db.refresh(conversation)
+
+            # Create user turn
+            turn_index = len(conversation.turns) if conversation.turns else 0
+            user_turn = Turn(
+                conversation_id=conversation.id,
+                turn_index=turn_index,
+                speaker=TurnSpeaker.user,
+                text=text,
+                text_language=detected_language,
+                intent=nlu_res["intent"],
+                entities=nlu_res["entities"],
+                nlu_confidence=nlu_res["confidence"]
+            )
+            db.add(user_turn)
+
+            # Dialogue decision with enhanced context
+            dm_res = dialogue_manager.decide(
+                intent=nlu_res["intent"],
+                entities=nlu_res["entities"],
+                context={
+                    "channel": platform,
+                    "customer_id": user_id,
+                    "message": text,
+                    "language": detected_language,
+                    "from": user_id
+                }
+            )
+
+            # Create bot turn
+            bot_turn = Turn(
+                conversation_id=conversation.id,
+                turn_index=turn_index + 1,
+                speaker=TurnSpeaker.bot,
+                text=dm_res["response_text"],
+                text_language=detected_language,
+                intent=nlu_res["intent"],
+                entities=nlu_res["entities"],
+                turn_data={"action": dm_res["action"], "metadata": dm_res["metadata"]}
+            )
+            db.add(bot_turn)
+
+            # Update conversation
+            conversation.last_message_at = user_turn.timestamp
+            conversation.unread_count += 1
+            db.commit()
+
+            reply = dm_res["response_text"]
+            processed_count += 1
+
+        except Exception as e:
+            print(f"Error processing {platform} message: {e}")
+            db.rollback()
+            reply = "দুঃখিত, একটি ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+        finally:
+            db.close()
+
+        # Send response
         if platform == "messenger":
             await _send_messenger(user_id, reply)
         elif platform == "instagram":
             await _send_instagram(user_id, reply)
 
-    return {"status": "ok", "processed": len(events)}
+    return {"status": "ok", "processed": processed_count}

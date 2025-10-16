@@ -276,95 +276,98 @@ class NLUService:
 
     def _classify_intent_keywords(self, text: str) -> tuple[str, float, str]:
         """
-        Fallback keyword-based intent classification with language detection
+        Enhanced keyword-based intent classification with improved language detection
         """
         text_lower = text.lower()
+        detected_lang = self._detect_language_enhanced(text)
 
-        # Multi-language keyword patterns
+        # Multi-language keyword patterns with improved coverage
         keywords = {
             "order_status": [
                 # English
-                "order", "status", "where", "when", "arrive",
+                "order", "status", "where", "when", "arrive", "tracking", "track",
                 # Bangla
-                "অর্ডার", "কোথায়", "কবে", "আসবে", "আছে",
+                "অর্ডার", "কোথায়", "কবে", "আসবে", "আছে", "স্ট্যাটাস", "ট্র্যাক",
                 # Hindi
-                "ऑर्डर", "कहाँ", "कब", "आएगा", "है",
+                "ऑर्डर", "कहाँ", "कब", "आएगा", "है", "स्थिति", "ट्रैक",
                 # Arabic
-                "طلب", "أين", "متى", "سيصل", "موجود",
+                "طلب", "أين", "متى", "سيصل", "موجود", "حالة", "تتبع",
                 # Urdu
-                "آرڈر", "کہاں", "کب", "آئے گا", "ہے"
+                "آرڈر", "کہاں", "کب", "آئے گا", "ہے", "حیثیت", "ٹریک"
             ],
             "return_request": [
                 # English
-                "return", "refund", "back",
+                "return", "refund", "back", "exchange", "replace",
                 # Bangla
-                "রিটার্ন", "ফেরত", "ferot",
+                "রিটার্ন", "ফেরত", "ferot", "রিফান্ড", "বদল",
                 # Hindi
-                "वापस", "रिटर्न", "वापसी",
+                "वापस", "रिटर्न", "वापसी", "रिफंड", "बदल",
                 # Arabic
-                "إرجاع", "إعادة", "رد",
+                "إرجاع", "إعادة", "رد", "استبدال", "تبديل",
                 # Urdu
-                "واپس", "ریٹرن", "واپسی"
+                "واپس", "ریٹرن", "واپسی", "ریفنڈ", "بدل"
             ],
             "product_inquiry": [
                 # English
-                "product", "available", "price", "cost", "details",
+                "product", "available", "price", "cost", "details", "info", "information",
                 # Bangla
-                "প্রোডাক্ট", "আছে", "দাম", "ডিটেলস",
+                "প্রোডাক্ট", "আছে", "দাম", "ডিটেলস", "তথ্য", "বিস্তারিত",
                 # Hindi
-                "प्रोडक्ट", "उपलब्ध", "कीमत", "विवरण",
+                "प्रोडक्ट", "उपलब्ध", "कीमत", "विवरण", "जानकारी", "माहिती",
                 # Arabic
-                "منتج", "متوفر", "سعر", "تفاصيل",
+                "منتج", "متوفر", "سعر", "تفاصيل", "معلومات", "معلومة",
                 # Urdu
-                "پروڈکٹ", "دستیاب", "قیمت", "تفصیلات"
+                "پروڈکٹ", "دستیاب", "قیمت", "تفصیلات", "معلومات", "معلومہ"
             ],
             "payment_issue": [
                 # English
-                "payment", "pay", "money", "taka", "failed",
+                "payment", "pay", "money", "taka", "failed", "error", "problem",
                 # Bangla
-                "পেমেন্ট", "টাকা", "কাটেনি", "ফেইলড",
+                "পেমেন্ট", "টাকা", "কাটেনি", "ফেইলড", "সমস্যা", "ভুল",
                 # Hindi
-                "भुगतान", "पैसे", "नहीं", "विफल",
+                "भुगतान", "पैसे", "नहीं", "विफल", "समस्या", "गलती",
                 # Arabic
-                "دفع", "مال", "لم", "فشل",
+                "دفع", "مال", "لم", "فشل", "مشكلة", "خطأ",
                 # Urdu
-                "ادائیگی", "پیسے", "نہیں", "ناکام"
+                "ادائیگی", "پیسے", "نہیں", "ناکام", "مسئلہ", "غلطی"
             ],
             "delivery_tracking": [
                 # English
-                "delivery", "courier", "tracking", "shipped",
+                "delivery", "courier", "tracking", "shipped", "ship", "logistics",
                 # Bangla
-                "ডেলিভারি", "কুরিয়ার", "রোডে", "পাঠানো",
+                "ডেলিভারি", "কুরিয়ার", "রোডে", "পাঠানো", "পরিবহন",
                 # Hindi
-                "डिलीवरी", "कूरियर", "ट्रैकिंग", "भेजा",
+                "डिलीवरी", "कूरियर", "ट्रैकिंग", "भेजा", "परिवहन",
                 # Arabic
-                "تسليم", "بريد", "تتبع", "شحن",
+                "تسليم", "بريد", "تتبع", "شحن", "نقل",
                 # Urdu
-                "ڈیلیوری", "کورئیر", "ٹریکنگ", "بھیجا"
+                "ڈیلیوری", "کورئیر", "ٹریکنگ", "بھیجا", "نقل و حمل"
             ],
             "complaint": [
                 # English
-                "complaint", "problem", "issue", "bad", "wrong",
+                "complaint", "problem", "issue", "bad", "wrong", "disappointed",
                 # Bangla
-                "অভিযোগ", "সমস্যা", "খারাপ", "ভুল",
+                "অভিযোগ", "সমস্যা", "খারাপ", "ভুল", "নাখোশ",
                 # Hindi
-                "शिकायत", "समस्या", "बुरा", "गलत",
+                "शिकायत", "समस्या", "बुरा", "गलत", "नाखुश",
                 # Arabic
-                "شكوى", "مشكلة", "سيء", "خطأ",
+                "شكوى", "مشكلة", "سيء", "خطأ", "مخيب",
                 # Urdu
-                "شکایت", "مسئلہ", "برا", "غلط"
+                "شکایت", "مسئلہ", "برا", "غلط", "ناپسندیدہ"
+            ],
+            "purchase_intent": [
+                # English
+                "buy", "purchase", "order", "get", "want", "need",
+                # Bangla
+                "কিনব", "ক্রয়", "অর্ডার", "চাই", "দরকার",
+                # Hindi
+                "खरीदना", "खरीद", "ऑर्डर", "चाहता", "जरूरत",
+                # Arabic
+                "شراء", "طلب", "أريد", "أحتاج", "أشتري",
+                # Urdu
+                "خریدنا", "خرید", "آرڈر", "چاہتا", "ضرورت"
             ]
         }
-
-        # Simple language detection based on script
-        if any('\u0980' <= char <= '\u09FF' for char in text):
-            detected_lang = "bn"  # Bangla
-        elif any('\u0600' <= char <= '\u06FF' for char in text):
-            detected_lang = "ar"  # Arabic
-        elif any('\u0900' <= char <= '\u097F' for char in text):
-            detected_lang = "hi"  # Hindi/Urdu
-        else:
-            detected_lang = "en"  # English or other Latin scripts
 
         scores = {}
         for intent, words in keywords.items():
@@ -374,10 +377,59 @@ class NLUService:
 
         if scores:
             best_intent = max(scores, key=scores.get)
-            confidence = min(0.8, 0.4 + scores[best_intent] * 0.1)
+            confidence = min(0.9, 0.5 + scores[best_intent] * 0.1)
             return best_intent, confidence, detected_lang
 
         return "fallback", 0.3, detected_lang
+
+    def _detect_language_enhanced(self, text: str) -> str:
+        """
+        Enhanced language detection with better script analysis and common words
+        """
+        text = text.strip()
+
+        # Script-based detection
+        has_bangla = any('\u0980' <= char <= '\u09FF' for char in text)
+        has_arabic = any('\u0600' <= char <= '\u06FF' for char in text)
+        has_devanagari = any('\u0900' <= char <= '\u097F' for char in text)
+
+        # Common word-based detection for ambiguous cases
+        bangla_words = ['আমি', 'আপনি', 'কি', 'কেন', 'কোথায়', 'কখন', 'কত', 'এবং', 'অথবা']
+        hindi_words = ['मैं', 'आप', 'क्या', 'क्यों', 'कहाँ', 'कब', 'कितना', 'और', 'या']
+        urdu_words = ['میں', 'آپ', 'کیا', 'کیوں', 'کہاں', 'کب', 'کتنا', 'اور', 'یا']
+        arabic_words = ['أنا', 'أنت', 'ما', 'لماذا', 'أين', 'متى', 'كم', 'و', 'أو']
+
+        text_lower = text.lower()
+
+        # Count language-specific words
+        bangla_count = sum(1 for word in bangla_words if word in text)
+        hindi_count = sum(1 for word in hindi_words if word in text)
+        urdu_count = sum(1 for word in urdu_words if word in text)
+        arabic_count = sum(1 for word in arabic_words if word in text)
+
+        # Determine language based on script and word analysis
+        if has_bangla:
+            return "bn"
+        elif has_arabic:
+            if urdu_count > arabic_count:
+                return "ur"
+            else:
+                return "ar"
+        elif has_devanagari:
+            if hindi_count >= urdu_count:
+                return "hi"
+            else:
+                return "ur"
+        else:
+            # For Latin script, check for common English patterns
+            english_indicators = ['the', 'and', 'or', 'is', 'are', 'was', 'were', 'what', 'where', 'when', 'how']
+            english_count = sum(1 for word in english_indicators if word in text_lower.split())
+
+            if english_count > 2:
+                return "en"
+            else:
+                # Default to English for unrecognized Latin text
+                return "en"
     
     async def resolve(self, text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

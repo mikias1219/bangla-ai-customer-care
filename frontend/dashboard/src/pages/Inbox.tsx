@@ -46,21 +46,34 @@ const formatTime = (date: Date) => {
 }
 
 interface Message {
-  id: string
+  id: number
+  turn_index: number
+  speaker: 'user' | 'bot' | 'agent'
   text: string
-  sender: 'user' | 'bot'
-  timestamp: Date
-  channel: 'messenger' | 'whatsapp' | 'instagram'
+  text_language?: string
+  intent?: string
+  entities?: Record<string, any>
+  asr_confidence?: number
+  nlu_confidence?: number
+  handoff_flag: boolean
+  timestamp: string
+  turn_metadata?: Record<string, any>
 }
 
 interface Conversation {
-  id: string
-  customerName: string
-  lastMessage: string
-  timestamp: Date
-  unreadCount: number
-  channel: 'messenger' | 'whatsapp' | 'instagram'
-  status: 'active' | 'waiting' | 'resolved' | 'completed' | 'escalated'
+  id: number
+  conversation_id: string
+  channel: string
+  customer_id?: string
+  customer_name?: string
+  customer_language: string
+  status: 'active' | 'completed' | 'escalated'
+  started_at: string
+  ended_at?: string
+  last_message_at?: string
+  unread_count: number
+  conversation_metadata?: Record<string, any>
+  turns?: Message[]
 }
 
 export function Inbox() {
@@ -77,59 +90,53 @@ export function Inbox() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const isTablet = useMediaQuery(theme.breakpoints.down('lg'))
 
-  // Sample conversations (in production, fetch from backend)
-  useEffect(() => {
-    const sampleConversations: Conversation[] = [
-      {
-        id: '1',
-        customerName: 'John Doe',
-        lastMessage: 'আমার অর্ডার কোথায়?',
-        timestamp: new Date(Date.now() - 5 * 60 * 1000),
-        unreadCount: 2,
-        channel: 'whatsapp',
-        status: 'active'
-      },
-      {
-        id: '2',
-        customerName: 'Sarah Wilson',
-        lastMessage: 'iPhone 15 price?',
-        timestamp: new Date(Date.now() - 15 * 60 * 1000),
-        unreadCount: 0,
-        channel: 'messenger',
-        status: 'waiting'
-      },
-      {
-        id: '3',
-        customerName: 'Ahmed Khan',
-        lastMessage: 'ডেলিভারি টাইম কত?',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        unreadCount: 1,
-        channel: 'instagram',
-        status: 'resolved'
-      }
-    ]
-    setConversations(sampleConversations)
-    setActiveConversation('1')
+  // Fetch conversations from backend
+  const fetchConversations = async (channel?: string) => {
+    try {
+      const params = new URLSearchParams()
+      if (channel) params.append('channel', channel)
+      params.append('limit', '50')
 
-    // Sample messages for active conversation
-    const sampleMessages: Message[] = [
-      {
-        id: '1',
-        text: 'হ্যালো, আমি কিছু জিজ্ঞাসা করতে চাই',
-        sender: 'user',
-        timestamp: new Date(Date.now() - 10 * 60 * 1000),
-        channel: 'whatsapp'
-      },
-      {
-        id: '2',
-        text: 'নিশ্চয়ই! আমি আপনাকে সাহায্য করতে পারি। আপনার কী প্রশ্ন আছে?',
-        sender: 'bot',
-        timestamp: new Date(Date.now() - 9 * 60 * 1000),
-        channel: 'whatsapp'
+      const response = await fetch(`/api/conversations?${params}`)
+      if (!response.ok) throw new Error('Failed to fetch conversations')
+
+      const data: Conversation[] = await response.json()
+      setConversations(data)
+
+      // Auto-select first conversation if none selected
+      if (!activeConversation && data.length > 0) {
+        setActiveConversation(data[0].id.toString())
       }
-    ]
-    setMessages(sampleMessages)
-  }, [])
+    } catch (error) {
+      console.error('Error fetching conversations:', error)
+      // Keep existing conversations or show empty state
+    }
+  }
+
+  // Fetch conversation details including turns
+  const fetchConversationDetails = async (conversationId: number) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`)
+      if (!response.ok) throw new Error('Failed to fetch conversation details')
+
+      const data: Conversation = await response.json()
+      if (data.turns) {
+        setMessages(data.turns)
+      }
+    } catch (error) {
+      console.error('Error fetching conversation details:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchConversations(activeChannel)
+  }, [activeChannel])
+
+  useEffect(() => {
+    if (activeConversation) {
+      fetchConversationDetails(parseInt(activeConversation))
+    }
+  }, [activeConversation])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -140,39 +147,36 @@ export function Inbox() {
   }, [messages])
 
   async function sendMessage() {
-    if (!input.trim()) return
+    if (!input.trim() || !activeConversation) return
 
     const userText = input
-    const newMessage: Message = {
-      id: Date.now().toString(),
+    const tempMessage: Message = {
+      id: -1, // Temporary ID
+      turn_index: messages.length,
       text: userText,
-      sender: 'user',
-      timestamp: new Date(),
-      channel: activeChannel
+      speaker: 'user',
+      text_language: 'en', // Will be detected by backend
+      handoff_flag: false,
+      timestamp: new Date().toISOString()
     }
 
-    setMessages(prev => [...prev, newMessage])
+    setMessages(prev => [...prev, tempMessage])
     setInput('')
     setIsTyping(true)
 
     try {
-      // Build conversation history for context
-      const conversationHistory = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }))
-
-      // Call backend Chat API for real GPT-powered response
-      const response = await fetch('/api/nlu/chat', {
+      // Call backend NLU API for processing
+      const response = await fetch('/api/nlu/resolve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           text: userText,
-          channel: activeChannel,
-          user_id: activeConversation || 'user_1',
-          conversation_history: conversationHistory
+          context: {
+            channel: activeChannel,
+            conversation_id: activeConversation
+          }
         })
       })
 
@@ -180,27 +184,63 @@ export function Inbox() {
         throw new Error(`Backend API error: ${response.status}`)
       }
 
-      const data = await response.json()
-      
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: data.response || 'আমি আপনাকে সাহায্য করতে পারছি না। দয়া করে আবার চেষ্টা করুন।',
-        sender: 'bot',
-        timestamp: new Date(),
-        channel: activeChannel
+      const nluResult = await response.json()
+
+      // Call dialogue manager for response
+      const dmResponse = await fetch('/api/dm/decide', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          intent: nluResult.intent,
+          entities: nluResult.entities,
+          context: {
+            channel: activeChannel,
+            customer_id: activeConversation,
+            message: userText,
+            language: nluResult.language
+          }
+        })
+      })
+
+      if (!dmResponse.ok) {
+        throw new Error(`Dialogue API error: ${dmResponse.status}`)
       }
-      
+
+      const dmResult = await dmResponse.json()
+
+      const botMessage: Message = {
+        id: -2, // Temporary ID
+        turn_index: messages.length + 1,
+        text: dmResult.response_text || 'I apologize, but I cannot help you right now. Please try again.',
+        speaker: 'bot',
+        text_language: dmResult.language || 'en',
+        intent: nluResult.intent,
+        entities: nluResult.entities,
+        nlu_confidence: nluResult.confidence,
+        handoff_flag: dmResult.action === 'handoff',
+        timestamp: new Date().toISOString(),
+        turn_metadata: dmResult.metadata
+      }
+
       setMessages(prev => [...prev, botMessage])
+
+      // Refresh conversations to update last message
+      fetchConversations(activeChannel)
+
     } catch (error) {
       console.error('Error sending message:', error)
-      
+
       // Fallback response if backend fails
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'দুঃখিত, সার্ভারে কানেক্ট করতে সমস্যা হচ্ছে। অনুগ্রহ করে একটু পরে আবার চেষ্টা করুন।',
-        sender: 'bot',
-        timestamp: new Date(),
-        channel: activeChannel
+        id: -3,
+        turn_index: messages.length + 1,
+        text: 'Sorry, there was an issue connecting to the server. Please try again later.',
+        speaker: 'bot',
+        text_language: 'en',
+        handoff_flag: false,
+        timestamp: new Date().toISOString()
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
@@ -250,86 +290,92 @@ export function Inbox() {
         <List dense>
           {conversations.map((conversation) => (
             <ListItem key={conversation.id} disablePadding>
-              <ListItemButton
-                selected={activeConversation === conversation.id}
-                onClick={() => {
-                  setActiveConversation(conversation.id)
-                  if (isMobile) setSidebarOpen(false)
-                }}
-                sx={{
-                  py: 2,
-                  px: 2,
-                  '&.Mui-selected': {
-                    bgcolor: alpha(theme.palette.primary.main, 0.08),
-                    borderRight: `3px solid ${theme.palette.primary.main}`,
-                  },
-                }}
-              >
-                <ListItemAvatar>
-                  <Badge
-                    color="error"
-                    badgeContent={conversation.unreadCount}
-                    invisible={conversation.unreadCount === 0}
-                  >
-                    <Avatar
-                      sx={{
-                        bgcolor: getChannelColor(conversation.channel),
-                        width: 40,
-                        height: 40
-                      }}
+                <ListItemButton
+                  selected={activeConversation === conversation.id.toString()}
+                  onClick={() => {
+                    setActiveConversation(conversation.id.toString())
+                    if (isMobile) setSidebarOpen(false)
+                  }}
+                  sx={{
+                    py: 2,
+                    px: 2,
+                    '&.Mui-selected': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      borderRight: `3px solid ${theme.palette.primary.main}`,
+                    },
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Badge
+                      color="error"
+                      badgeContent={conversation.unread_count}
+                      invisible={conversation.unread_count === 0}
                     >
-                      {conversation.customerName.charAt(0).toUpperCase()}
-                    </Avatar>
-                  </Badge>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {conversation.customerName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {formatTime(conversation.timestamp)}
-                      </Typography>
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <Typography
-                        variant="body2"
+                      <Avatar
                         sx={{
-                          color: 'text.secondary',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          mb: 1
+                          bgcolor: getChannelColor(conversation.channel),
+                          width: 40,
+                          height: 40
                         }}
                       >
-                        {conversation.lastMessage}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                          label={conversation.channel}
-                          size="small"
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {conversation.status === 'active' && (
-                            <AccessTimeIcon sx={{ fontSize: 12, color: 'warning.main' }} />
-                          )}
-                          {conversation.status === 'completed' && (
-                            <CheckCircleIcon sx={{ fontSize: 12, color: 'success.main' }} />
-                          )}
-                          {conversation.status === 'escalated' && (
-                            <ErrorIcon sx={{ fontSize: 12, color: 'error.main' }} />
-                          )}
+                        {conversation.customer_name?.charAt(0).toUpperCase() || conversation.customer_id?.charAt(0).toUpperCase() || '?'}
+                      </Avatar>
+                    </Badge>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                          {conversation.customer_name || conversation.customer_id || 'Unknown Customer'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {conversation.last_message_at ? formatTime(new Date(conversation.last_message_at)) : formatTime(new Date(conversation.started_at))}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: 'text.secondary',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            mb: 1
+                          }}
+                        >
+                          {conversation.conversation_metadata?.last_message || 'No messages yet'}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip
+                            label={conversation.channel}
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                          <Chip
+                            label={conversation.customer_language.toUpperCase()}
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {conversation.status === 'active' && (
+                              <AccessTimeIcon sx={{ fontSize: 12, color: 'warning.main' }} />
+                            )}
+                            {conversation.status === 'completed' && (
+                              <CheckCircleIcon sx={{ fontSize: 12, color: 'success.main' }} />
+                            )}
+                            {conversation.status === 'escalated' && (
+                              <ErrorIcon sx={{ fontSize: 12, color: 'error.main' }} />
+                            )}
+                          </Box>
                         </Box>
                       </Box>
-                    </Box>
-                  }
-                />
-              </ListItemButton>
+                    }
+                  />
+                </ListItemButton>
             </ListItem>
           ))}
         </List>
@@ -463,33 +509,41 @@ export function Inbox() {
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar
-                    sx={{
-                      bgcolor: getChannelColor(activeChannel),
-                      width: 40,
-                      height: 40
-                    }}
-                  >
-                    J
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      John Doe
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: getChannelColor(activeChannel),
-                        }}
-                      />
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        Active now
-                      </Typography>
-                    </Box>
-                  </Box>
+                  {(() => {
+                    const activeConv = conversations.find(c => c.id.toString() === activeConversation)
+                    return (
+                      <>
+                        <Avatar
+                          sx={{
+                            bgcolor: getChannelColor(activeConv?.channel || activeChannel),
+                            width: 40,
+                            height: 40
+                          }}
+                        >
+                          {activeConv?.customer_name?.charAt(0).toUpperCase() ||
+                           activeConv?.customer_id?.charAt(0).toUpperCase() || '?'}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                            {activeConv?.customer_name || activeConv?.customer_id || 'Unknown Customer'}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: getChannelColor(activeConv?.channel || activeChannel),
+                              }}
+                            />
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {activeConv?.channel || activeChannel} • {activeConv?.customer_language.toUpperCase() || 'EN'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </>
+                    )
+                  })()}
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {!isMobile && (
@@ -526,10 +580,10 @@ export function Inbox() {
               >
                 {messages.map((message) => (
                   <Box
-                    key={message.id}
+                    key={message.id || message.turn_index}
                     sx={{
                       display: 'flex',
-                      justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
+                      justifyContent: message.speaker === 'user' ? 'flex-end' : 'flex-start',
                     }}
                   >
                     <Box
@@ -538,7 +592,7 @@ export function Inbox() {
                         px: 2,
                         py: 1.5,
                         borderRadius: 3,
-                        ...(message.sender === 'user'
+                        ...(message.speaker === 'user'
                           ? {
                               bgcolor: 'primary.main',
                               color: 'primary.contrastText',
@@ -556,16 +610,32 @@ export function Inbox() {
                       <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>
                         {message.text}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          mt: 0.5,
-                          display: 'block',
-                          opacity: 0.7,
-                        }}
-                      >
-                        {formatTime(message.timestamp)}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            opacity: 0.7,
+                          }}
+                        >
+                          {formatTime(new Date(message.timestamp))}
+                        </Typography>
+                        {message.intent && (
+                          <Chip
+                            label={`${message.intent} (${message.nlu_confidence?.toFixed(2) || 'N/A'})`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: 16, fontSize: '0.6rem' }}
+                          />
+                        )}
+                        {message.handoff_flag && (
+                          <Chip
+                            label="Handoff"
+                            size="small"
+                            color="warning"
+                            sx={{ height: 16, fontSize: '0.6rem' }}
+                          />
+                        )}
+                      </Box>
                     </Box>
                   </Box>
                 ))}

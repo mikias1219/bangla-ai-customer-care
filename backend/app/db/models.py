@@ -73,11 +73,15 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(String(100), unique=True, nullable=False, index=True)
-    channel = Column(String(50))  # voice, whatsapp, messenger, web, mobile
+    channel = Column(String(50))  # whatsapp, messenger, instagram, voice, web, mobile
     customer_id = Column(String(100), index=True)
+    customer_name = Column(String(255))
+    customer_language = Column(String(10), default="bn")  # Detected language: bn, en, hi, ar, ur, etc.
     status = Column(Enum(ConversationStatus), default=ConversationStatus.active)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     ended_at = Column(DateTime(timezone=True))
+    last_message_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    unread_count = Column(Integer, default=0)
     conversation_data = Column(JSON)  # Store channel-specific metadata
 
     # Relationships
@@ -92,6 +96,7 @@ class Turn(Base):
     turn_index = Column(Integer, nullable=False)
     speaker = Column(Enum(TurnSpeaker), nullable=False)
     text = Column(Text, nullable=False)
+    text_language = Column(String(10))  # Language of the text: bn, en, hi, ar, ur, etc.
     intent = Column(String(100))
     entities = Column(JSON)
     asr_confidence = Column(Float)

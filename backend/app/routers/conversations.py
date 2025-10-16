@@ -15,6 +15,7 @@ class TurnResponse(BaseModel):
     turn_index: int
     speaker: TurnSpeaker
     text: str
+    text_language: Optional[str]
     intent: Optional[str]
     entities: Optional[Dict[str, Any]]
     asr_confidence: Optional[float]
@@ -32,9 +33,13 @@ class ConversationResponse(BaseModel):
     conversation_id: str
     channel: str
     customer_id: Optional[str]
+    customer_name: Optional[str]
+    customer_language: str
     status: ConversationStatus
     started_at: datetime
     ended_at: Optional[datetime]
+    last_message_at: Optional[datetime]
+    unread_count: int
     conversation_metadata: Optional[Dict[str, Any]]
 
     class Config:
@@ -51,16 +56,23 @@ def list_conversations(
     limit: int = 50,
     channel: Optional[str] = None,
     status: Optional[ConversationStatus] = None,
+    language: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Conversation)
-    
+
     if channel:
         query = query.filter(Conversation.channel == channel)
     if status:
         query = query.filter(Conversation.status == status)
-    
-    conversations = query.order_by(Conversation.started_at.desc()).offset(skip).limit(limit).all()
+    if language:
+        query = query.filter(Conversation.customer_language == language)
+
+    # Order by last message time, then by started time
+    conversations = query.order_by(
+        Conversation.last_message_at.desc().nulls_last(),
+        Conversation.started_at.desc()
+    ).offset(skip).limit(limit).all()
     return conversations
 
 
