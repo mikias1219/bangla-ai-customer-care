@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -266,7 +266,7 @@ def get_order_stats(db: Session = Depends(get_db)):
     """Get order statistics overview"""
     total_orders = db.query(Order).count()
     total_revenue = db.query(Order).filter(Order.payment_status == PaymentStatus.paid).with_entities(
-        db.func.sum(Order.total_amount)
+        func.sum(Order.total_amount)
     ).scalar() or 0.0
 
     pending_orders = db.query(Order).filter(Order.status.in_([OrderStatus.pending, OrderStatus.confirmed])).count()
