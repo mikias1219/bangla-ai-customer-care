@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.tenant import get_current_tenant, TenantContext
 from app.db.session import get_db
+from app.db.models import Client
 from app.services.openai_service import openai_service
 from app.services.dialogue_manager import dialogue_manager
 
@@ -36,17 +37,43 @@ async def test_agent(
     Test AI agent with a message for the current tenant.
     This endpoint allows clients to test their AI agents for free.
     """
+    return await test_agent_for_tenant(request, tenant_id, db)
+
+
+@router.post("/admin/test/{tenant_id}", response_model=TestAgentResponse)
+async def admin_test_agent(
+    tenant_id: str,
+    request: TestAgentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint to test AI agent for any tenant.
+    This allows admins to test agents for their clients.
+    """
+    return await test_agent_for_tenant(request, tenant_id, db)
+
+
+async def test_agent_for_tenant(
+    request: TestAgentRequest,
+    tenant_id: str,
+    db: Session
+):
+    """
+    Test AI agent with a message for the specified tenant.
+    This endpoint allows testing AI agents for any tenant (used by both clients and admins).
+    """
     try:
-        # Get tenant information
-        client_id = TenantContext.get_client_id()
-        if not client_id:
-            raise HTTPException(status_code=401, detail="Client not authenticated")
+        # Validate tenant exists
+        client = db.query(Client).filter(Client.tenant_id == tenant_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Tenant not found")
 
         # For now, use a simple OpenAI completion
         # In the future, this could use tenant-specific models/training data
 
-        system_prompt = f"""You are a helpful AI assistant for a business in Bangladesh.
+        system_prompt = f"""You are a helpful AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
 You should respond in {request.language} language and be helpful, friendly, and professional.
+Business details: {client.business_address}, Contact: {client.contact_person} ({client.contact_email})
 Context: {request.context if request.context else 'General business inquiry'}"""
 
         user_message = request.message
