@@ -34,46 +34,63 @@ jobs:
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $SSH_USER@$SSH_HOST "echo 'SSH connection successful'"
 
-      - name: Deploy to VPS
+      - name: System Update and Package Installation
         run: |
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
             set -e
-
-            echo "🚀 Starting deployment..."
-
-            # Update system
+            echo "🔄 Updating system packages..."
             sudo apt update && sudo apt upgrade -y
-
-            # Install required packages
+            echo "📦 Installing required packages..."
             sudo apt install -y nginx python3 python3-pip python3-venv nodejs npm snapd curl
+            echo "✅ System update and package installation completed"
+          EOF
 
-            # Install certbot
+      - name: Setup SSL Certificates
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            echo "🔒 Installing Certbot for SSL certificates..."
             sudo snap install core
             sudo snap refresh core
             sudo snap install --classic certbot
             sudo ln -sf /snap/bin/certbot /usr/bin/certbot
+            echo "📜 Obtaining SSL certificate for $DOMAIN..."
+            sudo certbot certonly --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email $SSL_EMAIL \
+              -d $DOMAIN \
+              -d www.$DOMAIN
+            echo "✅ SSL certificates setup completed"
+          EOF
 
-            # Create project directory
+      - name: Create Project Directory and Setup
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            echo "📁 Creating project directory..."
             sudo mkdir -p /opt/bangla-ai-customer-care
             sudo chown $USER:$USER /opt/bangla-ai-customer-care
-
-            # Stop existing services
+            echo "🛑 Stopping existing services..."
             sudo systemctl stop bangla-frontend 2>/dev/null || true
             sudo systemctl stop bangla-backend 2>/dev/null || true
+            echo "✅ Project directory setup completed"
+          EOF
 
-            echo "📦 Setting up backend..."
+      - name: Deploy Backend
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            echo "🔧 Setting up backend..."
             cd /opt/bangla-ai-customer-care
-
-            # Copy backend files from GitHub workspace
+            echo "📋 Copying backend files..."
             cp -r $GITHUB_WORKSPACE/backend .
-
-            # Install backend dependencies
+            echo "🐍 Installing backend dependencies..."
             python3 -m venv venv
             source venv/bin/activate
             pip install --upgrade pip
             pip install fastapi uvicorn sqlalchemy alembic redis httpx aiohttp requests python-jose passlib python-multipart prometheus-client openai python-dateutil pytz fuzzywuzzy python-levenshtein numpy
-
-            # Create .env file
+            echo "⚙️ Creating environment configuration..."
             cat > .env << ENV_EOF
             BANG_OPENAI_API_KEY=${{ secrets.OPENAI_API }}
             BANG_DATABASE_URL=sqlite:///./bangla.db
@@ -81,18 +98,21 @@ jobs:
             BANG_CORS_ORIGINS=["https://$DOMAIN", "http://localhost:3000"]
             BANG_REDIS_URL=redis://localhost:6379/0
             ENV_EOF
+            echo "✅ Backend deployment completed"
+          EOF
 
+      - name: Deploy Frontend
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
             echo "🎨 Setting up frontend..."
             cd /opt/bangla-ai-customer-care
-
-            # Copy frontend files from GitHub workspace
+            echo "📋 Copying frontend files..."
             cp -r $GITHUB_WORKSPACE/frontend .
-
-            # Install Node.js dependencies
+            echo "📦 Installing Node.js dependencies..."
             cd frontend
             npm install
-
-            # Build the React app if dashboard exists
+            echo "🔨 Building React application..."
             if [ -d "dashboard" ]; then
               cd dashboard
               npm install
@@ -100,25 +120,20 @@ jobs:
               cd ..
               cp -r dashboard/dist/* . 2>/dev/null || true
             fi
+            cd ..
+            echo "✅ Frontend deployment completed"
+          EOF
 
-            echo "🔒 Setting up SSL certificates..."
-            # Obtain SSL certificate
-            sudo certbot certonly --standalone \
-              --non-interactive \
-              --agree-tos \
-              --email $SSL_EMAIL \
-              -d $DOMAIN \
-              -d www.$DOMAIN
-
+      - name: Configure Nginx
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
             echo "⚙️ Configuring Nginx..."
-            # Create nginx configuration
             sudo tee /etc/nginx/sites-available/bangla > /dev/null << NGINX_EOF
             server {
                 listen 80;
                 listen [::]:80;
                 server_name $DOMAIN www.$DOMAIN;
-
-                # Redirect HTTP to HTTPS
                 return 301 https://\$server_name\$request_uri;
             }
 
@@ -127,18 +142,14 @@ jobs:
                 listen [::]:443 ssl http2;
                 server_name $DOMAIN www.$DOMAIN;
 
-                # SSL Configuration with Let's Encrypt certificates
                 ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
                 ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-
-                # SSL Security Settings
                 ssl_protocols TLSv1.2 TLSv1.3;
                 ssl_ciphers HIGH:!aNULL:!MD5;
                 ssl_prefer_server_ciphers on;
                 ssl_session_cache shared:SSL:10m;
                 ssl_session_timeout 10m;
 
-                # Frontend - proxy to port 3002
                 location / {
                     proxy_pass http://127.0.0.1:$FRONTEND_PORT;
                     proxy_http_version 1.1;
@@ -149,13 +160,10 @@ jobs:
                     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                     proxy_set_header X-Forwarded-Proto \$scheme;
                     proxy_cache_bypass \$http_upgrade;
-
-                    # Frontend specific settings
                     proxy_buffering off;
                     proxy_request_buffering off;
                 }
 
-                # Backend API proxy
                 location /api/ {
                     proxy_pass http://127.0.0.1:$BACKEND_PORT/;
                     proxy_set_header Host \$host;
@@ -167,7 +175,6 @@ jobs:
                     proxy_set_header Connection "upgrade";
                 }
 
-                # Channels endpoint for WebSocket/real-time features
                 location /channels/ {
                     proxy_pass http://127.0.0.1:$BACKEND_PORT/channels/;
                     proxy_set_header Host \$host;
@@ -176,14 +183,12 @@ jobs:
                     proxy_set_header X-Forwarded-Proto \$scheme;
                 }
 
-                # Health check endpoint
                 location /health {
                     proxy_pass http://127.0.0.1:$BACKEND_PORT/health;
                     proxy_set_header Host \$host;
                     proxy_set_header X-Real-IP \$remote_addr;
                 }
 
-                # Gzip compression
                 gzip on;
                 gzip_vary on;
                 gzip_min_length 1024;
@@ -191,12 +196,18 @@ jobs:
             }
             NGINX_EOF
 
-            # Enable nginx site
             sudo ln -sf /etc/nginx/sites-available/bangla /etc/nginx/sites-enabled/
             sudo rm -f /etc/nginx/sites-enabled/default
+            sudo nginx -t && sudo systemctl reload nginx
+            echo "✅ Nginx configuration completed"
+          EOF
 
+      - name: Setup Systemd Services
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
             echo "🔄 Setting up systemd services..."
-            # Create frontend service
+
             sudo tee /etc/systemd/system/bangla-frontend.service > /dev/null << FRONTEND_SERVICE_EOF
             [Unit]
             Description=Bangla Frontend (Node.js)
@@ -215,7 +226,6 @@ jobs:
             WantedBy=multi-user.target
             FRONTEND_SERVICE_EOF
 
-            # Create backend service
             sudo tee /etc/systemd/system/bangla-backend.service > /dev/null << BACKEND_SERVICE_EOF
             [Unit]
             Description=Bangla Backend (FastAPI)
@@ -234,27 +244,33 @@ jobs:
             WantedBy=multi-user.target
             BACKEND_SERVICE_EOF
 
-            # Reload systemd and start services
             sudo systemctl daemon-reload
-
-            echo "▶️ Starting services..."
             sudo systemctl enable bangla-frontend
             sudo systemctl enable bangla-backend
+            echo "✅ Systemd services setup completed"
+          EOF
+
+      - name: Start Services and Test Deployment
+        run: |
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            echo "▶️ Starting services..."
             sudo systemctl start bangla-frontend
             sudo systemctl start bangla-backend
 
-            # Test nginx configuration
-            sudo nginx -t && sudo systemctl reload nginx
-
-            echo "✅ Deployment completed!"
-            echo "🌐 Frontend: https://$DOMAIN (port $FRONTEND_PORT)"
-            echo "🔧 Backend: http://localhost:$BACKEND_PORT"
-            echo "🔒 SSL: Let's Encrypt certificate for $DOMAIN"
-
-            # Test the deployment
             echo "🧪 Testing deployment..."
-            sleep 5
+            sleep 10
+
+            echo "📊 Services status:"
+            sudo systemctl status bangla-frontend --no-pager -l || echo "❌ Frontend status check failed"
+            sudo systemctl status bangla-backend --no-pager -l || echo "❌ Backend status check failed"
+
+            echo "🌐 Testing endpoints..."
             curl -k https://$DOMAIN/health && echo "✅ Health check passed" || echo "❌ Health check failed"
             curl -I https://$DOMAIN | head -1 && echo "✅ HTTPS working" || echo "❌ HTTPS failed"
 
+            echo "✅ Deployment completed successfully!"
+            echo "🌐 Frontend: https://$DOMAIN (port $FRONTEND_PORT)"
+            echo "🔧 Backend: http://localhost:$BACKEND_PORT"
+            echo "🔒 SSL: Let's Encrypt certificate for $DOMAIN"
           EOF

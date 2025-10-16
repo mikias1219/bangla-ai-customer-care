@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bangla AI Platform - Production Deployment Script
+# Bangla AI Platform - Production Deployment Script (Direct Deployment - No Docker)
 # Run this on your VPS after setting up the environment
 
 echo "🚀 Bangla AI Platform - Production Deployment"
@@ -20,35 +20,61 @@ else
   exit 1
 fi
 
-# Check required variables
-if [ -z "${REGISTRY:-}" ] || [ -z "${OWNER:-}" ]; then
-  echo "❌ REGISTRY and OWNER must be set in .env"
-  exit 1
+echo ""
+echo "📦 Deploying application directly to server..."
+
+# Stop existing services
+echo "🛑 Stopping existing services..."
+sudo systemctl stop bangla-frontend 2>/dev/null || true
+sudo systemctl stop bangla-backend 2>/dev/null || true
+
+echo ""
+echo "🔧 Setting up backend..."
+# Install backend dependencies
+python3 -m venv venv --clear
+source venv/bin/activate
+pip install --upgrade pip
+pip install fastapi uvicorn sqlalchemy alembic redis httpx aiohttp requests python-jose passlib python-multipart prometheus-client openai python-dateutil pytz fuzzywuzzy python-levenshtein numpy
+
+echo ""
+echo "🎨 Setting up frontend..."
+# Install Node.js dependencies
+cd frontend
+npm install
+
+# Build the React app if dashboard exists
+if [ -d "dashboard" ]; then
+  cd dashboard
+  npm install
+  npm run build
+  cd ..
+  cp -r dashboard/dist/* . 2>/dev/null || true
 fi
 
-echo ""
-echo "📦 Pulling latest images from ${REGISTRY}/${OWNER}"
-docker compose -f deploy/docker-compose.prod.yml pull || echo "⚠️  Some images not found, using local builds"
-
-echo ""
-echo "🐳 Starting services..."
-docker compose -f deploy/docker-compose.prod.yml up -d
+cd ..
 
 echo ""
 echo "⏳ Waiting for services to be ready..."
-sleep 15
+sleep 5
 
 echo ""
 echo "🗄️  Initializing database..."
-docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/init_db.py || echo "⚠️  DB init failed, continuing..."
+source venv/bin/activate
+python scripts/init_db.py || echo "⚠️  DB init failed, continuing..."
 
 echo ""
 echo "📱 Adding sample products for AI agent demo..."
-docker compose -f deploy/docker-compose.prod.yml exec -T backend python scripts/add_sample_products.py || echo "⚠️  Sample products failed, continuing..."
+python scripts/add_sample_products.py || echo "⚠️  Sample products failed, continuing..."
+
+echo ""
+echo "▶️ Starting services..."
+sudo systemctl start bangla-frontend
+sudo systemctl start bangla-backend
 
 echo ""
 echo "📊 Services status:"
-docker compose -f deploy/docker-compose.prod.yml ps
+sudo systemctl status bangla-frontend --no-pager -l || echo "Frontend status check failed"
+sudo systemctl status bangla-backend --no-pager -l || echo "Backend status check failed"
 
 echo ""
 echo "✅ Deployment complete!"
@@ -59,26 +85,22 @@ echo "   Dashboard: https://yourdomain.com"
 echo "   API Docs:  https://api.yourdomain.com/docs (if using separate domain)"
 echo "   Admin API: https://yourdomain.com/api/admin/intents"
 echo ""
-echo "📈 Monitoring (optional):"
-echo "   Grafana:   https://yourdomain.com:3000"
-echo "   Prometheus: https://yourdomain.com:9090"
-echo ""
 echo "🔐 Default admin credentials:"
 echo "   Username: admin"
 echo "   Password: admin123"
 echo "   ⚠️  CHANGE THIS IMMEDIATELY IN PRODUCTION!"
 echo ""
 echo "📋 Next steps:"
-echo "   1. Update DNS records to point to your VPS"
-echo "   2. Configure Caddy reverse proxy (see Caddyfile)"
-echo "   3. Set up SSL certificates (automatic with Caddy)"
-echo "   4. Configure social media webhooks if needed"
-echo "   5. Test the application thoroughly"
+echo "   1. Test the application thoroughly"
+echo "   2. Configure SSL certificates if not already done"
+echo "   3. Set up monitoring and backups"
 echo ""
 echo "🆘 Troubleshooting:"
-echo "   View logs: docker compose -f deploy/docker-compose.prod.yml logs -f"
-echo "   Restart:   docker compose -f deploy/docker-compose.prod.yml restart"
-echo "   Stop:      docker compose -f deploy/docker-compose.prod.yml down"
+echo "   View backend logs: sudo journalctl -u bangla-backend -f"
+echo "   View frontend logs: sudo journalctl -u bangla-frontend -f"
+echo "   Restart backend: sudo systemctl restart bangla-backend"
+echo "   Restart frontend: sudo systemctl restart bangla-frontend"
+echo "   Check processes: ps aux | grep -E '(python|node)'"
 echo ""
 echo "🎉 Your Bangla AI customer service platform is now live!"
 

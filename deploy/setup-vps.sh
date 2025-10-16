@@ -52,23 +52,6 @@ log_success "System updated"
 log_info "Installing essential packages..."
 sudo apt install -y curl wget git htop ufw fail2ban unattended-upgrades apt-transport-https ca-certificates gnupg lsb-release jq
 
-# Install Docker
-log_info "Installing Docker..."
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt update
-    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    sudo systemctl enable docker
-    sudo systemctl start docker
-    log_success "Docker installed"
-else
-    log_info "Docker already installed"
-fi
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-log_info "Added user to docker group (logout/login required for group changes)"
 
 # Install Nginx
 log_info "Installing Nginx..."
@@ -125,7 +108,7 @@ sudo tee /etc/logrotate.d/bdchatpro > /dev/null <<EOF
     notifempty
     create 644 $USER $USER
     postrotate
-        docker compose -f /opt/bdchatpro/deploy/docker-compose.prod.yml logs -f > /dev/null 2>&1 || true
+        systemctl reload bdchatpro > /dev/null 2>&1 || true
     endscript
 }
 EOF
@@ -137,7 +120,6 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     log_info "Creating deployment user..."
     sudo useradd -m -s /bin/bash deploy
-    sudo usermod -aG docker deploy
     sudo mkdir -p /home/deploy/.ssh
     sudo chown deploy:deploy /home/deploy/.ssh
     sudo chmod 700 /home/deploy/.ssh
@@ -178,17 +160,16 @@ log_info "Creating systemd service..."
 sudo tee /etc/systemd/system/bdchatpro.service > /dev/null <<EOF
 [Unit]
 Description=Bangla AI Platform
-After=docker.service
-Requires=docker.service
+After=network.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/bdchatpro
 User=$USER
-ExecStart=/usr/bin/docker compose -f deploy/docker-compose.prod.yml up -d
-ExecStop=/usr/bin/docker compose -f deploy/docker-compose.prod.yml down
-ExecReload=/usr/bin/docker compose -f deploy/docker-compose.prod.yml restart
+ExecStart=/bin/bash -c "echo 'Application started - manual management required'"
+ExecStop=/bin/bash -c "echo 'Application stopped - manual management required'"
+ExecReload=/bin/bash -c "echo 'Application reload - manual management required'"
 
 [Install]
 WantedBy=multi-user.target
@@ -208,8 +189,9 @@ DATE=\$(date +%Y%m%d_%H%M%S)
 
 mkdir -p \$BACKUP_DIR
 
-# Backup database
-docker compose -f deploy/docker-compose.prod.yml exec -T postgres pg_dump -U bangla bangla_ai > \$BACKUP_DIR/db_backup_\$DATE.sql
+# Note: Database backup requires manual setup without Docker
+echo "Database backup requires manual configuration - no Docker available"
+echo "Please configure PostgreSQL backup manually"
 
 # Backup environment file
 cp /opt/bdchatpro/.env \$BACKUP_DIR/env_backup_\$DATE
@@ -243,12 +225,12 @@ echo "• Regularly update the system"
 echo "• Monitor logs: sudo journalctl -u bdchatpro -f"
 echo ""
 echo "📊 Monitoring:"
-echo "• Application logs: docker compose -f deploy/docker-compose.prod.yml logs -f"
+echo "• Application logs: Check /opt/bdchatpro/logs/ directory"
 echo "• Nginx logs: sudo tail -f /var/log/nginx/bdchatpro.access.log"
 echo "• System monitoring: htop or sudo systemctl status bdchatpro"
 echo ""
 echo "🆘 Troubleshooting:"
 echo "• Restart services: sudo systemctl restart bdchatpro"
 echo "• View service status: sudo systemctl status bdchatpro"
-echo "• Check Docker: docker ps"
-echo "• View logs: docker compose -f deploy/docker-compose.prod.yml logs"
+echo "• Check application status: ps aux | grep python"
+echo "• View application logs: tail -f /opt/bdchatpro/logs/*.log"
