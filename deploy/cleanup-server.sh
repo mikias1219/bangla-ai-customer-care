@@ -34,10 +34,11 @@ echo "🔪 Killing any processes using ports 3002 and 8000..."
 sudo fuser -k 3002/tcp 2>/dev/null || true
 sudo fuser -k 8000/tcp 2>/dev/null || true
 
-# Clean up any apt locks
-echo "🔓 Cleaning up apt locks..."
+# Clean up any apt locks and fix dpkg
+echo "🔓 Cleaning up apt locks and fixing dpkg..."
 sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
 sudo killall -9 apt apt-get dpkg 2>/dev/null || true
+sudo dpkg --configure -a
 
 echo "✅ Server cleanup completed!"
 echo ""
