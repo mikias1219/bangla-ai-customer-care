@@ -36,7 +36,8 @@ import {
   Fab,
   IconButton,
   LinearProgress,
-  FormControlLabel
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Facebook,
@@ -94,6 +95,18 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
   useEffect(() => {
     loadClientUsers();
   }, [client.id]);
+
+  // Cleanup voice recording on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+      }
+      if (recordedAudio) {
+        URL.revokeObjectURL(recordedAudio.toString());
+      }
+    };
+  }, [mediaRecorder, isRecording, recordedAudio]);
 
   const loadClientUsers = async () => {
     try {
@@ -193,6 +206,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       recorder.onstop = () => {
         const audioBlob = new Blob(chunks, { type: 'audio/wav' });
         setRecordedAudio(audioBlob);
+        setIsRecording(false);
 
         // Stop all tracks to free up the microphone
         stream.getTracks().forEach(track => track.stop());
@@ -570,10 +584,10 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <FormControlLabel
                           control={
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={generateVoiceResponse}
                               onChange={(e) => setGenerateVoiceResponse(e.target.checked)}
+                              color="primary"
                             />
                           }
                           label="Generate voice response"
