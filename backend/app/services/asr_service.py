@@ -50,53 +50,51 @@ class ASRService:
             audio_file.name = f"audio.{file_format}"  # OpenAI needs a filename
 
             # Call OpenAI Whisper API
-            response = await self.client.audio.transcriptions.create(
-                model=self.model,
-                file=audio_file,
-                language=None,  # Auto-detect language for multi-language support
-                response_format="verbose_json",  # Get detailed response with confidence
-                temperature=0  # More deterministic results
-            )
-
-            # Handle the response properly - OpenAI returns an object, not a dict
-            if hasattr(response, 'text'):
-                text = response.text.strip()
-            else:
-                text = str(response).strip()
-
-            # Extract confidence from segments if available
-            confidence = 0.8  # Default confidence
-            language_detected = language or 'bn'
-
             try:
-                if hasattr(response, 'segments') and response.segments:
-                    # Average confidence across segments
-                    confidences = []
-                    for seg in response.segments:
-                        if hasattr(seg, 'confidence') and seg.confidence is not None:
-                            confidences.append(seg.confidence)
-                        elif hasattr(seg, 'no_speech_prob') and seg.no_speech_prob is not None:
-                            # Convert no_speech_prob to confidence (lower is better)
-                            confidences.append(1.0 - seg.no_speech_prob)
+                response = await self.client.audio.transcriptions.create(
+                    model=self.model,
+                    file=audio_file,
+                    language=None,  # Auto-detect language for multi-language support
+                    response_format="json",  # Use JSON format for reliable parsing
+                    temperature=0  # More deterministic results
+                )
+                print(f"ASR API call successful, response type: {type(response)}")
 
-                    if confidences:
-                        confidence = sum(confidences) / len(confidences)
+                # OpenAI returns a dict when response_format="json"
+                if isinstance(response, dict):
+                    text = response.get('text', '').strip()
+                    confidence = response.get('confidence', 0.8)
+                    language_detected = response.get('language', language or 'bn')
+                    segments = response.get('segments', [])
+                    duration = response.get('duration', None)
+                elif hasattr(response, 'text'):
+                    # Fallback for object response
+                    text = response.text.strip()
+                    confidence = getattr(response, 'confidence', 0.8)
+                    language_detected = getattr(response, 'language', language or 'bn')
+                    segments = getattr(response, 'segments', [])
+                    duration = getattr(response, 'duration', None)
+                else:
+                    # Last resort
+                    text = str(response).strip()
+                    confidence = 0.8
+                    language_detected = language or 'bn'
+                    segments = []
+                    duration = None
 
-                if hasattr(response, 'language') and response.language:
-                    language_detected = response.language
+                print(f"Extracted text: '{text[:50]}...', confidence: {confidence}, language: {language_detected}")
 
-            except Exception as e:
-                print(f"Error extracting confidence/language: {e}")
-                # Continue with defaults
-
-            return {
-                "text": text,
-                "confidence": confidence,
-                "language": language_detected,
-                "model_used": self.model,
-                "segments": getattr(response, 'segments', []),
-                "duration": getattr(response, 'duration', None)
-            }
+                return {
+                    "text": text,
+                    "confidence": confidence,
+                    "language": language_detected,
+                    "model_used": self.model,
+                    "segments": segments,
+                    "duration": duration
+                }
+            except Exception as api_error:
+                print(f"OpenAI API error: {api_error}")
+                raise
 
         except Exception as e:
             print(f"ASR transcription error: {e}")
