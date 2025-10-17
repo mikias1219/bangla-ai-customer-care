@@ -51,22 +51,23 @@ class ASRService:
 
             # Call OpenAI Whisper API
             try:
+                # Use text format for simpler response handling
                 response = await self.client.audio.transcriptions.create(
                     model=self.model,
                     file=audio_file,
                     language=None,  # Auto-detect language for multi-language support
-                    response_format="json",  # Use JSON format for reliable parsing
+                    response_format="text",  # Use text format for reliable string response
                     temperature=0  # More deterministic results
                 )
                 print(f"ASR API call successful, response type: {type(response)}")
 
-                # OpenAI returns a dict when response_format="json"
-                if isinstance(response, dict):
-                    text = response.get('text', '').strip()
-                    confidence = response.get('confidence', 0.8)
-                    language_detected = response.get('language', language or 'bn')
-                    segments = response.get('segments', [])
-                    duration = response.get('duration', None)
+                # OpenAI returns a string when response_format="text"
+                if isinstance(response, str):
+                    text = response.strip()
+                    confidence = 0.8  # Default confidence for text format
+                    language_detected = language or 'bn'  # No language detection in text format
+                    segments = []
+                    duration = None
                 elif hasattr(response, 'text'):
                     # Fallback for object response
                     text = response.text.strip()
@@ -75,7 +76,7 @@ class ASRService:
                     segments = getattr(response, 'segments', [])
                     duration = getattr(response, 'duration', None)
                 else:
-                    # Last resort
+                    # Last resort - convert to string
                     text = str(response).strip()
                     confidence = 0.8
                     language_detected = language or 'bn'
@@ -94,6 +95,8 @@ class ASRService:
                 }
             except Exception as api_error:
                 print(f"OpenAI API error: {api_error}")
+                import traceback
+                traceback.print_exc()
                 raise
 
         except Exception as e:
