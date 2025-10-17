@@ -11,10 +11,17 @@ from app.core.config import settings
 
 class ASRService:
     def __init__(self):
-        # Initialize OpenAI client
-        self.client = openai.OpenAI(api_key=settings.openai_api_key)
+        # Lazy load OpenAI client
+        self._client = None
         self.model = "whisper-1"  # OpenAI's latest Whisper model
         print(f"ASR service initialized with OpenAI Whisper API: {self.model}")
+
+    @property
+    def client(self):
+        """Lazy load OpenAI client"""
+        if self._client is None:
+            self._client = openai.OpenAI(api_key=settings.openai_api_key)
+        return self._client
     
     async def transcribe(
         self,
