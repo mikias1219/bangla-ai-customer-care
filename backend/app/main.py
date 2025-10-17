@@ -9,6 +9,8 @@ from app.routers.admin_clients import router as admin_clients_router
 from app.routers.client_auth import router as client_auth_router
 from app.routers.payments import router as payments_router
 from app.routers.public_registration import router as public_registration_router
+from app.routers.agent_test import router as agent_test_router
+from app.routers.social_media import router as social_media_router
 from app.channels import whatsapp, webchat
 from app.channels import meta as meta_channel
 from app.channels import voice_twilio, voice_voip
@@ -59,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(nlu.router, prefix="/nlu", tags=["nlu"])
     app.include_router(dm.router, prefix="/dm", tags=["dialogue"])
     app.include_router(resolver.router, prefix="/resolver", tags=["resolver"])
+    app.include_router(agent_test_router, prefix="/agent", tags=["agent"])
     
     # Admin routers
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
@@ -72,7 +75,10 @@ def create_app() -> FastAPI:
     app.include_router(products.router, tags=["products"])
     app.include_router(orders.router, tags=["orders"])
     app.include_router(customers.router, tags=["customers"])
-    
+
+    # Social Media Management
+    app.include_router(social_media_router, prefix="/social-media", tags=["social-media"])
+
     # Channel adapters
     app.include_router(whatsapp.router, prefix="/channels/whatsapp", tags=["channels"])
     app.include_router(webchat.router, prefix="/channels/webchat", tags=["channels"])

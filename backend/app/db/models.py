@@ -542,3 +542,107 @@ class Transaction(Base):
         {"schema": None},
     )
 
+
+# Social Media Management Models
+class SocialMediaAccount(Base):
+    __tablename__ = "social_media_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+
+    # Platform details
+    platform = Column(String(50), nullable=False)  # 'facebook', 'instagram', 'whatsapp'
+    account_id = Column(String(255), nullable=False)  # Platform-specific account ID
+    account_name = Column(String(255), nullable=False)  # Display name
+
+    # Authentication
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text)
+    expires_at = Column(DateTime(timezone=True))
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    client = relationship("Client", backref="social_media_accounts")
+    posts = relationship("SocialMediaPost", back_populates="account")
+
+    __table_args__ = (
+        {"schema": None},
+    )
+
+
+class SocialMediaPost(Base):
+    __tablename__ = "social_media_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("social_media_accounts.id"), nullable=False)
+
+    # Content
+    content = Column(Text, nullable=False)
+    media_urls = Column(JSON, default=list)  # List of media URLs
+    hashtags = Column(JSON, default=list)  # List of hashtags
+
+    # Scheduling
+    scheduled_at = Column(DateTime(timezone=True))
+    posted_at = Column(DateTime(timezone=True))
+
+    # Status and metrics
+    status = Column(String(50), default="draft")  # draft, scheduled, posted, failed
+    engagement_count = Column(Integer, default=0)
+    reach_count = Column(Integer, default=0)
+    impression_count = Column(Integer, default=0)
+
+    # Platform-specific post ID
+    platform_post_id = Column(String(255))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    account = relationship("SocialMediaAccount", back_populates="posts")
+
+    __table_args__ = (
+        {"schema": None},
+    )
+
+
+class SocialMediaAnalytics(Base):
+    __tablename__ = "social_media_analytics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("social_media_accounts.id"), nullable=False)
+
+    # Analytics data
+    followers_count = Column(Integer, default=0)
+    following_count = Column(Integer, default=0)
+    posts_count = Column(Integer, default=0)
+    engagement_rate = Column(Float, default=0.0)
+
+    # Time period
+    period_start = Column(DateTime(timezone=True), nullable=False)
+    period_end = Column(DateTime(timezone=True), nullable=False)
+
+    # Detailed metrics
+    reach_total = Column(Integer, default=0)
+    impressions_total = Column(Integer, default=0)
+    likes_total = Column(Integer, default=0)
+    comments_total = Column(Integer, default=0)
+    shares_total = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    account = relationship("SocialMediaAccount", backref="analytics")
+
+    __table_args__ = (
+        {"schema": None},
+    )
+

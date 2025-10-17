@@ -25,6 +25,12 @@ class NLUService:
             "modify_order",      # অর্ডার পরিবর্তন করতে চাই
             "refund_status",     # রিফান্ড স্ট্যাটাস
             "customer_support",  # কাস্টমার সাপোর্ট চাই
+            # Social Media intents
+            "social_media_post",    # Create social media post
+            "social_media_analytics", # Get analytics
+            "social_media_schedule",  # Schedule post
+            "social_media_connect",   # Connect account
+            "social_media_disconnect", # Disconnect account
             "fallback"           # অন্য কিছু
         ]
 
@@ -102,6 +108,48 @@ class NLUService:
                 "يوجد مشكلة", "خدمة سيئة", "أريد الشكوى",
                 # Urdu
                 "مسئلہ ہے", "برا سروس", "میں شکایت کرنا چاہتا ہوں"
+            ],
+            "social_media_post": [
+                # Bangla
+                "ফেসবুকে পোস্ট করো", "ইন্সটাগ্রামে ছবি আপলোড করো", "সোশ্যাল মিডিয়ায় পোস্ট করুন",
+                "ফেসবুকে লিখুন", "ইন্সটাগ্রামে পাবলিশ করো", "পোস্ট তৈরি করো",
+                # English
+                "post to facebook", "upload to instagram", "create social media post",
+                "publish on facebook", "share on instagram", "make a post",
+                # Hindi
+                "फेसबुक पर पोस्ट करें", "इंस्टाग्राम पर अपलोड करें", "सोशल मीडिया पोस्ट बनाएं",
+                # Arabic
+                "انشر على فيسبوك", "ارفع على إنستغرام", "أنشئ منشوراً",
+                # Urdu
+                "فیس بک پر پوسٹ کریں", "انسٹاگرام پر اپ لوڈ کریں", "سوشل میڈیا پوسٹ بنائیں"
+            ],
+            "social_media_analytics": [
+                # Bangla
+                "সোশ্যাল মিডিয়া রিপোর্ট দেখাও", "অ্যানালিটিক্স দেখুন", "ফলোয়ার কত?",
+                "এংগেজমেন্ট রেট কি?", "পোস্ট পারফরমেন্স দেখুন",
+                # English
+                "show social media report", "view analytics", "how many followers?",
+                "what's engagement rate?", "check post performance",
+                # Hindi
+                "सोशल मीडिया रिपोर्ट दिखाएं", "एनालिटिक्स देखें", "फॉलोअर्स कितने हैं?",
+                # Arabic
+                "أظهر تقرير وسائل التواصل", "عرض التحليلات", "كم عدد المتابعين؟",
+                # Urdu
+                "سوشل میڈیا رپورٹ دکھائیں", "تجزیات دیکھیں", "فالوورز کتنے ہیں؟"
+            ],
+            "social_media_schedule": [
+                # Bangla
+                "পোস্ট শিডিউল করো", "পরে পাবলিশ করো", "সময় নির্ধারণ করুন",
+                "ভবিষ্যতে পোস্ট করো", "শিডিউল সেট করুন",
+                # English
+                "schedule post", "publish later", "set time for post",
+                "schedule for future", "plan post timing",
+                # Hindi
+                "पोस्ट शेड्यूल करें", "बाद में प्रकाशित करें", "समय निर्धारित करें",
+                # Arabic
+                "جدولة المنشور", "نشر لاحقاً", "تحديد وقت المنشور",
+                # Urdu
+                "پوسٹ شیڈول کریں", "بعد میں پبلش کریں", "وقت مقرر کریں"
             ]
         }
         
@@ -215,6 +263,11 @@ class NLUService:
                 "modify_order": "Customer wants to change order details, quantity, address, or other modifications",
                 "refund_status": "Customer wants to know about refund status or refund processing",
                 "customer_support": "Customer needs general help, support, or has questions not covered by other categories",
+                "social_media_post": "Customer wants to create or publish a post on social media platforms like Facebook or Instagram",
+                "social_media_analytics": "Customer wants to view social media analytics, follower counts, or engagement metrics",
+                "social_media_schedule": "Customer wants to schedule a social media post for future publishing",
+                "social_media_connect": "Customer wants to connect or link their social media account",
+                "social_media_disconnect": "Customer wants to disconnect or unlink their social media account",
                 "fallback": "General queries that don't fit other categories"
             }
 
@@ -366,6 +419,30 @@ class NLUService:
                 "شراء", "طلب", "أريد", "أحتاج", "أشتري",
                 # Urdu
                 "خریدنا", "خرید", "آرڈر", "چاہتا", "ضرورت"
+            ],
+            "social_media_post": [
+                # English
+                "post", "publish", "share", "upload", "facebook", "instagram", "social media",
+                # Bangla
+                "পোস্ট", "পাবলিশ", "শেয়ার", "আপলোড", "ফেসবুক", "ইন্সটাগ্রাম", "সোশ্যাল মিডিয়া",
+                # Hindi
+                "पोस्ट", "प्रकाशित", "शेयर", "अपलोड", "फेसबुक", "इंस्टाग्राम", "सोशल मीडिया",
+                # Arabic
+                "منشور", "نشر", "مشاركة", "رفع", "فيسبوك", "إنستغرام", "وسائل التواصل",
+                # Urdu
+                "پوسٹ", "پبلش", "شیئر", "اپ لوڈ", "فیس بک", "انسٹاگرام", "سوشل میڈیا"
+            ],
+            "social_media_analytics": [
+                # English
+                "analytics", "report", "followers", "engagement", "performance", "stats", "metrics",
+                # Bangla
+                "অ্যানালিটিক্স", "রিপোর্ট", "ফলোয়ার", "এংগেজমেন্ট", "পারফরমেন্স", "পরিসংখ্যান",
+                # Hindi
+                "एनालिटिक्स", "रिपोर्ट", "फॉलोअर्स", "एंगेजमेंट", "परफॉरमेंस", "आंकड़े",
+                # Arabic
+                "تحليلات", "تقرير", "متابعين", "تفاعل", "أداء", "إحصائيات",
+                # Urdu
+                "تجزیات", "رپورٹ", "فالوورز", "انگیجمنٹ", "کارکردگی", "اعداد و شمار"
             ]
         }
 
