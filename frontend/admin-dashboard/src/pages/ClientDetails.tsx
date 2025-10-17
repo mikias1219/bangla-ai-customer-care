@@ -161,7 +161,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       setAgentResponse(null);
 
       // Use the admin endpoint to test the agent's response
-      const response = await fetch(`http://bdchatpro.com/api/agent/admin/test/${client.tenant_id}`, {
+      const response = await fetch(`https://bdchatpro.com/api/agent/admin/test/${client.tenant_id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,8 +193,30 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
   // Voice recording functions
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Check if we're on HTTPS (required for getUserMedia)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        alert('Voice recording requires HTTPS. Please access this page over a secure connection (HTTPS).');
+        return;
+      }
+
+      // Check if MediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Your browser does not support voice recording. Please use a modern browser like Chrome, Firefox, or Safari.');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      });
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+
       const chunks: Blob[] = [];
 
       recorder.ondataavailable = (event) => {
@@ -204,7 +226,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
       };
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
         setRecordedAudio(audioBlob);
         setIsRecording(false);
 
@@ -212,12 +234,33 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
         stream.getTracks().forEach(track => track.stop());
       };
 
+      recorder.onerror = (event) => {
+        console.error('Recording error:', event);
+        alert('An error occurred during recording. Please try again.');
+        setIsRecording(false);
+      };
+
       setMediaRecorder(recorder);
-      recorder.start();
+      recorder.start(1000); // Collect data every second
       setIsRecording(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting recording:', error);
-      alert('Could not access microphone. Please check permissions.');
+
+      let errorMessage = 'Could not access microphone. ';
+
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow microphone access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No microphone found. Please connect a microphone and try again.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Microphone is already in use by another application.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage += 'Microphone does not meet the required constraints.';
+      } else {
+        errorMessage += 'Please check your browser settings and try again.';
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -247,7 +290,7 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
         client_name: client.business_name
       }));
 
-      const response = await fetch(`${(import.meta as any).env?.VITE_API_URL || 'http://bdchatpro.com/api'}/agent/voice/test`, {
+      const response = await fetch(`${(import.meta as any).env?.VITE_API_URL || 'https://bdchatpro.com/api'}/agent/voice/test`, {
         method: 'POST',
         body: formData,
         headers: {
@@ -540,6 +583,15 @@ function ClientDetails({ client, onBack, onUpdate }: ClientDetailsProps) {
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         Test your AI agent with voice messages. Record audio and get AI responses with language detection.
                       </Typography>
+
+                      {/* HTTPS Warning */}
+                      {window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                          <Typography variant="body2">
+                            ⚠️ Voice recording requires HTTPS. Please access this page over a secure connection.
+                          </Typography>
+                        </Alert>
+                      )}
 
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                         {!isRecording ? (

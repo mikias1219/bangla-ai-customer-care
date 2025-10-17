@@ -51,18 +51,41 @@ class ASRService:
                 temperature=0  # More deterministic results
             )
 
+            # Handle the response properly - OpenAI returns an object, not a dict
+            if hasattr(response, 'text'):
+                text = response.text.strip()
+            else:
+                text = str(response).strip()
+
             # Extract confidence from segments if available
             confidence = 0.8  # Default confidence
-            if hasattr(response, 'segments') and response.segments:
-                # Average confidence across segments
-                confidences = [seg.get('confidence', 0.8) for seg in response.segments if 'confidence' in seg]
-                if confidences:
-                    confidence = sum(confidences) / len(confidences)
+            language_detected = language or 'bn'
+
+            try:
+                if hasattr(response, 'segments') and response.segments:
+                    # Average confidence across segments
+                    confidences = []
+                    for seg in response.segments:
+                        if hasattr(seg, 'confidence') and seg.confidence is not None:
+                            confidences.append(seg.confidence)
+                        elif hasattr(seg, 'no_speech_prob') and seg.no_speech_prob is not None:
+                            # Convert no_speech_prob to confidence (lower is better)
+                            confidences.append(1.0 - seg.no_speech_prob)
+
+                    if confidences:
+                        confidence = sum(confidences) / len(confidences)
+
+                if hasattr(response, 'language') and response.language:
+                    language_detected = response.language
+
+            except Exception as e:
+                print(f"Error extracting confidence/language: {e}")
+                # Continue with defaults
 
             return {
-                "text": response.text.strip(),
+                "text": text,
                 "confidence": confidence,
-                "language": getattr(response, 'language', language or 'bn'),
+                "language": language_detected,
                 "model_used": self.model,
                 "segments": getattr(response, 'segments', []),
                 "duration": getattr(response, 'duration', None)
