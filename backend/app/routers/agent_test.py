@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 import re
-from fastapi import APIRouter, Depends, HTTPException
+import base64
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,8 @@ from app.core.tenant import get_current_tenant, TenantContext
 from app.db.session import get_db
 from app.db.models import Client
 from app.services.openai_service import openai_service
+from app.services.asr_service import asr_service
+from app.services.tts_service import tts_service
 from app.services.dialogue_manager import dialogue_manager
 
 router = APIRouter()
@@ -92,6 +95,14 @@ class TestAgentResponse(BaseModel):
     confidence: Optional[float] = None
     tokens_used: Optional[int] = None
     processing_time: Optional[float] = None
+    audio_response_url: Optional[str] = None  # For voice responses
+    transcribed_text: Optional[str] = None     # For voice input transcription
+
+class VoiceTestAgentRequest(BaseModel):
+    audio_data: str  # Base64 encoded audio
+    audio_format: str = "wav"
+    context: Optional[Dict[str, Any]] = {}
+    generate_voice_response: bool = False
 
 
 @router.post("/test", response_model=TestAgentResponse)
@@ -209,6 +220,129 @@ Context: {request.context if request.context else 'General business inquiry'}"""
         raise HTTPException(status_code=500, detail=f"Agent test failed: {str(e)}")
 
 
+@router.post("/voice/test", response_model=TestAgentResponse)
+async def test_agent_voice(
+    audio_data: UploadFile = File(...),
+    tenant_id: str = Form(...),
+    generate_voice_response: bool = Form(False),
+    context: str = Form("{}"),
+    db: Session = Depends(get_db)
+):
+    """
+    Test AI agent with voice message (audio file)
+    This endpoint allows testing AI agents with voice input
+    """
+    try:
+        # Validate tenant exists
+        client = db.query(Client).filter(Client.tenant_id == tenant_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        # Read audio data
+        audio_bytes = await audio_data.read()
+
+        # Transcribe audio to text using ASR service
+        import io
+        audio_buffer = io.BytesIO(audio_bytes)
+
+        transcription_result = await asr_service.transcribe(
+            audio_data=audio_buffer,
+            language=None,  # Auto-detect language
+            file_format=audio_data.filename.split('.')[-1] if '.' in audio_data.filename else 'wav'
+        )
+
+        if not transcription_result.get("text"):
+            raise HTTPException(status_code=400, detail="Could not transcribe audio")
+
+        transcribed_text = transcription_result["text"]
+        detected_language = transcription_result.get("language", "bn")
+
+        # Now process the transcribed text through the AI agent
+        # Get language-specific instructions
+        language_instructions = get_language_instructions(detected_language)
+
+        # Create dynamic system prompt based on detected language
+        if detected_language == 'bn':
+            system_prompt = f"""{language_instructions}
+
+আপনি {client.business_name} এর জন্য একজন AI সহকারী, যা বাংলাদেশের একটি {client.business_type} ব্যবসা।
+ব্যবসার বিস্তারিত তথ্য: {client.business_address}, যোগাযোগ: {client.contact_person} ({client.contact_email})
+
+প্রসঙ্গ: {context if context != '{}' else 'সাধারণ ব্যবসায়িক অনুসন্ধান'}"""
+        elif detected_language == 'banglish':
+            system_prompt = f"""{language_instructions}
+
+You are an AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
+Business details: {client.business_address}, Contact: {client.contact_person} ({client.contact_email})
+
+Context: {context if context != '{}' else 'General business inquiry'}"""
+        else:  # English
+            system_prompt = f"""{language_instructions}
+
+You are an AI assistant for {client.business_name}, a {client.business_type} business in Bangladesh.
+Business details: {client.business_address}, Contact: {client.contact_person} ({client.contact_email})
+
+Context: {context if context != '{}' else 'General business inquiry'}"""
+
+        # Call OpenAI service with transcribed text
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": transcribed_text}
+        ]
+        ai_response = await openai_service.generate_response(
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
+        )
+
+        # Try to analyze intent and entities (simplified)
+        intent = None
+        entities = {}
+        confidence = 0.8
+
+        # Simple intent detection
+        message_lower = transcribed_text.lower()
+        if any(word in message_lower for word in ['price', 'cost', 'rate', 'amount', 'tk', '৳', 'টাকা', 'দাম']):
+            intent = 'price_inquiry'
+        elif any(word in message_lower for word in ['time', 'hour', 'open', 'close', 'সময়', 'ঘন্টা', 'খোলা', 'বন্ধ']):
+            intent = 'business_hours'
+        else:
+            intent = 'general_inquiry'
+
+        # Generate voice response if requested
+        audio_response_url = None
+        if generate_voice_response and ai_response:
+            try:
+                tts_result = tts_service.synthesize(
+                    text=ai_response,
+                    language=detected_language,
+                    voice=None  # Use default voice
+                )
+
+                if tts_result.get("audio_content"):
+                    # Convert audio to base64 for response
+                    audio_b64 = base64.b64encode(tts_result["audio_content"]).decode()
+                    audio_response_url = f"data:audio/mp3;base64,{audio_b64}"
+            except Exception as e:
+                print(f"TTS generation failed: {e}")
+                # Continue without voice response
+
+        return TestAgentResponse(
+            response=ai_response if ai_response else 'দুঃখিত, আমি উত্তর তৈরি করতে পারিনি।' if detected_language == 'bn' else 'Sorry, I could not generate a response.',
+            detected_language=detected_language,
+            intent=intent,
+            entities=entities,
+            confidence=confidence,
+            tokens_used=None,  # Would need to modify OpenAI service to return usage
+            processing_time=0.5,  # Placeholder
+            transcribed_text=transcribed_text,
+            audio_response_url=audio_response_url
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice agent test failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_agent_status(
     tenant_id: str = Depends(get_current_tenant)
@@ -231,7 +365,10 @@ async def get_agent_status(
             "Entity extraction",
             "Context awareness",
             "Multi-language support",
-            "Business-specific responses"
+            "Business-specific responses",
+            "Voice message support",
+            "Audio transcription",
+            "Voice response generation"
         ]
     }
 
